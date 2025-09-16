@@ -82,15 +82,64 @@ class TestCon5013(unittest.TestCase):
         """Test custom URL prefix configuration."""
         config = {'CON5013_URL_PREFIX': '/admin/console'}
         console = Con5013(self.app, config=config)
-        
+
         with self.app.test_client() as client:
             # Test custom prefix route
             response = client.get('/admin/console/')
             self.assertNotEqual(response.status_code, 404)
-            
+
             # Test original prefix should not exist
             response = client.get('/con5013/')
             self.assertEqual(response.status_code, 404)
+
+    def test_custom_system_box_in_stats(self):
+        """Custom system boxes should appear in the stats payload."""
+        console = Con5013(self.app)
+        console.add_system_box('custom-info', title='System Info', rows=[
+            {'name': 'Platform', 'value': 'TestOS 1.0'},
+            {
+                'name': 'Usage',
+                'value': '75%',
+                'progress': {
+                    'value': 75,
+                    'min': 0,
+                    'max': 100,
+                    'color_rules': [
+                        {'threshold': 80, 'class': 'error'},
+                        {'threshold': 60, 'class': 'warning'},
+                    ],
+                },
+            },
+        ])
+
+        stats = console.get_system_stats()
+        boxes = stats.get('custom_boxes', [])
+        self.assertTrue(any(box.get('title') == 'System Info' for box in boxes))
+
+        with self.app.test_client() as client:
+            response = client.get('/con5013/api/system/stats')
+            self.assertEqual(response.status_code, 200)
+            payload = response.get_json() or {}
+            api_boxes = (payload.get('stats') or {}).get('custom_boxes', [])
+            self.assertTrue(any(box.get('title') == 'System Info' for box in api_boxes))
+
+    def test_custom_system_box_provider_callable(self):
+        """Provider callables should be evaluated for custom system boxes."""
+        console = Con5013(self.app)
+
+        def dynamic_box():
+            return {
+                'title': 'Dynamic Box',
+                'rows': [
+                    {'name': 'Status', 'value': 'OK'},
+                ],
+            }
+
+        console.add_system_box('dynamic', provider=dynamic_box)
+
+        stats = console.get_system_stats()
+        boxes = stats.get('custom_boxes', [])
+        self.assertTrue(any(box.get('title') == 'Dynamic Box' for box in boxes))
 
 class TestCon5013Components(unittest.TestCase):
     """Test Con5013 individual components."""

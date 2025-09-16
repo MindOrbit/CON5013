@@ -1318,6 +1318,9 @@ class Con5013Console {
     }
     
     displaySystemStats(stats) {
+        const customBoxes = (stats && Array.isArray(stats.custom_boxes)) ? stats.custom_boxes : [];
+        this.renderCustomSystemBoxes(customBoxes);
+
         // System info
         if (stats.system) {
             document.getElementById('system-platform').textContent = stats.system.platform || 'Unknown';
@@ -1462,7 +1465,183 @@ class Con5013Console {
             this.prevNetwork = null;
         }
     }
-    
+
+    renderCustomSystemBoxes(boxes = []) {
+        const container = document.getElementById('con5013-system');
+        if (!container) return;
+
+        // Remove previously rendered custom cards
+        const previous = Array.from(container.querySelectorAll('[data-custom-system-card="true"]'));
+        previous.forEach((card) => card.remove());
+
+        if (!Array.isArray(boxes) || !boxes.length) {
+            return;
+        }
+
+        const sorted = boxes
+            .filter((box) => box && box.enabled !== false)
+            .sort((a, b) => {
+                const orderA = Number.isFinite(Number(a?.order)) ? Number(a.order) : 0;
+                const orderB = Number.isFinite(Number(b?.order)) ? Number(b.order) : 0;
+                if (orderA === orderB) {
+                    return String(a?.title || '').localeCompare(String(b?.title || ''));
+                }
+                return orderA - orderB;
+            });
+
+        sorted.forEach((box) => {
+            const card = document.createElement('div');
+            card.className = 'con5013-system-card';
+            card.dataset.customSystemCard = 'true';
+            if (box && box.id) {
+                card.id = `con5013-system-custom-${box.id}`;
+            }
+
+            const title = document.createElement('div');
+            title.className = 'con5013-system-title';
+            title.textContent = box?.title || 'Custom Metric';
+            card.appendChild(title);
+
+            let rows = Array.isArray(box?.rows) ? box.rows : [];
+            if ((!rows || !rows.length) && box?.error) {
+                rows = [{ name: 'Status', value: box.error }];
+            }
+
+            rows.forEach((row, index) => {
+                if (!row) return;
+                const label = row.name || row.label;
+                if (!label) return;
+
+                const metric = document.createElement('div');
+                metric.className = 'con5013-metric';
+
+                const hasProgress = row.progress && typeof row.progress.value === 'number' && !Number.isNaN(row.progress.value);
+                if (hasProgress) {
+                    metric.classList.add('has-progress');
+                }
+
+                const labelEl = document.createElement('span');
+                labelEl.className = 'con5013-metric-label';
+                labelEl.textContent = label;
+                metric.appendChild(labelEl);
+
+                const valueEl = document.createElement('span');
+                valueEl.className = 'con5013-metric-value';
+                let displayValue = row.display_value;
+                if (displayValue === undefined || displayValue === null) {
+                    displayValue = row.value;
+                }
+                if ((displayValue === undefined || displayValue === null || displayValue === '') && row.progress && row.progress.display_value !== undefined) {
+                    displayValue = row.progress.display_value;
+                }
+                valueEl.textContent = displayValue !== undefined && displayValue !== null ? String(displayValue) : '';
+                metric.appendChild(valueEl);
+
+                card.appendChild(metric);
+
+                if (hasProgress) {
+                    const toNumber = (val, fallback) => {
+                        const num = Number(val);
+                        return Number.isFinite(num) ? num : fallback;
+                    };
+                    const min = toNumber(row.progress.min, 0);
+                    let max = toNumber(row.progress.max, 100);
+                    if (max <= min) {
+                        max = min + 1;
+                    }
+                    const rawValue = toNumber(row.progress.value, min);
+                    const clamped = Math.min(Math.max(rawValue, min), max);
+                    const percent = ((clamped - min) / (max - min)) * 100;
+
+                    const progressContainer = document.createElement('div');
+                    progressContainer.className = 'con5013-progress after-metric';
+
+                    const progressBar = document.createElement('div');
+                    progressBar.className = 'con5013-progress-bar';
+                    progressBar.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+                    progressBar.setAttribute('aria-valuemin', String(min));
+                    progressBar.setAttribute('aria-valuemax', String(max));
+                    progressBar.setAttribute('aria-valuenow', String(clamped));
+
+                    if (row.progress && row.progress.tooltip) {
+                        progressBar.title = String(row.progress.tooltip);
+                    }
+
+                    const progressClass = this.resolveProgressClass(row.progress, clamped);
+                    if (progressClass) {
+                        progressClass.split(/\s+/).filter(Boolean).forEach((cls) => progressBar.classList.add(cls));
+                    }
+
+                    progressContainer.appendChild(progressBar);
+                    card.appendChild(progressContainer);
+
+                    const includeDivider = (row.progress.divider !== false) && (index !== rows.length - 1);
+                    if (includeDivider) {
+                        const divider = document.createElement('div');
+                        divider.className = 'con5013-divider';
+                        card.appendChild(divider);
+                    }
+                } else if (row.divider && index !== rows.length - 1) {
+                    const divider = document.createElement('div');
+                    divider.className = 'con5013-divider';
+                    card.appendChild(divider);
+                }
+            });
+
+            container.appendChild(card);
+        });
+    }
+
+    resolveProgressClass(progress, value) {
+        if (!progress) return '';
+        if (progress.color) {
+            return String(progress.color);
+        }
+        const rules = Array.isArray(progress.color_rules) ? [...progress.color_rules] : [];
+        rules.sort((a, b) => {
+            const thresholdA = Number.isFinite(Number(a?.threshold)) ? Number(a.threshold) : -Infinity;
+            const thresholdB = Number.isFinite(Number(b?.threshold)) ? Number(b.threshold) : -Infinity;
+            return thresholdB - thresholdA;
+        });
+
+        for (const rule of rules) {
+            if (!rule) continue;
+            const threshold = Number(rule.threshold);
+            if (!Number.isFinite(threshold)) continue;
+            const cls = rule.class || rule.color;
+            if (!cls) continue;
+            const operator = (rule.operator || 'gte').toLowerCase();
+            switch (operator) {
+                case 'gt':
+                case '>':
+                    if (value > threshold) return cls;
+                    break;
+                case 'lt':
+                case '<':
+                    if (value < threshold) return cls;
+                    break;
+                case 'lte':
+                case '<=':
+                    if (value <= threshold) return cls;
+                    break;
+                case 'eq':
+                case '==':
+                    if (value === threshold) return cls;
+                    break;
+                case 'ne':
+                case '!=':
+                    if (value !== threshold) return cls;
+                    break;
+                case 'gte':
+                case '>=':
+                default:
+                    if (value >= threshold) return cls;
+                    break;
+            }
+        }
+        return '';
+    }
+
     // Utility functions
     escapeHtml(text) {
         const div = document.createElement('div');
