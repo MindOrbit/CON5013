@@ -21,7 +21,7 @@
 - **LogMonitor** ingests Python logging output and configured files, normalises entries, and keeps bounded buffers per source while offering helpers to attach extra loggers and expose a Flask handler.【F:con5013/core/log_monitor.py†L20-L200】
 - **TerminalEngine** registers built-in commands (status, routes, HTTP probes, Python evaluation), manages history, and provides extension points for custom or Crawl4AI-specific commands alongside safe execution utilities.【F:con5013/core/terminal_engine.py†L22-L312】
 - **APIScanner** walks the Flask URL map to document endpoints, build sample paths, and exercise them either through the app’s test client or outbound HTTP requests for comprehensive testing and reporting.【F:con5013/core/api_scanner.py†L20-L338】
-- **SystemMonitor** aggregates system, application, and (optionally) GPU metrics using `psutil`/`pynvml`, formats uptime, paginates processes, and derives overall health signals.【F:con5013/core/system_monitor.py†L18-L320】
+- **SystemMonitor** aggregates system, application, and (optionally) GPU metrics using `psutil`/`pynvml`, formats uptime, paginates processes, derives overall health signals, and merges any custom boxes registered through `Con5013.add_system_box` into the stats payload so UI extensions stay in lockstep with native metrics.【F:con5013/core/system_monitor.py†L18-L320】【F:con5013/__init__.py†L318-L449】
 - **Utility helpers** currently expose `get_con5013_instance` so request handlers can grab the active extension safely.【F:con5013/core/utils.py†L6-L16】
 
 ### Front-end assets

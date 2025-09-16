@@ -82,6 +82,18 @@ def create_app() -> Flask:
         'CON5013_DEFAULT_LOG_SOURCE': 'CON5013',
     })
 
+    # Showcase a custom System tab box with static Matrix lore
+    console.add_system_box(
+        'matrix-trilogy',
+        title='Matrix Trilogy',
+        description='Static data example rendered in the System tab.',
+        rows=[
+            {'name': 'The Matrix (1999)', 'value': 'Neo chooses the red pill'},
+            {'name': 'Reloaded (2003)', 'value': 'Burly brawl stress tests the One'},
+            {'name': 'Revolutions (2003)', 'value': 'Peace brokered with the Machines'},
+        ],
+    )
+
     # Register the demo custom command with help text from docstring
     console.add_custom_command('matrix', matrix_command, description=matrix_command.__doc__.split('\n')[0])
 

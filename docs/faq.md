@@ -46,23 +46,26 @@ Treat commands like micro-APIs: validate input, return structured dictionaries, 
 ### Q12. Can I expose health data from external services in the System tab?
 Yes. Use the `system_monitor` hooks to register new collectors that fetch metrics from services like Redis, Elasticsearch, or Kubernetes. Return normalized dictionaries so they render alongside CPU/memory stats. For read-only dashboards, disable Terminal but keep these collectors active for a holistic operations view.
 
-### Q13. How do I integrate Crawl4AI telemetry if I already have bespoke scraping logic?
+### Q13. How do I add a custom card to the System tab?
+Call `console.add_system_box` after initializing Con5013. Provide a unique ID (or let the helper derive one from the title) plus a list of row dictionaries. Each row needs a `name` and `value`, and can optionally include a `progress` spec for inline gauges. For dynamic content, supply `callable` values or a `provider` function that returns the entire box payload. You can toggle visibility via `console.set_system_box_enabled` or remove it altogether with `console.remove_system_box`. The Matrix demo shows a static example, while the advanced implementation demonstrates dynamic provider-driven boxes.【F:examples/matrix_app.py†L74-L90】【F:examples/advanced_implementation.py†L128-L194】
+
+### Q14. How do I integrate Crawl4AI telemetry if I already have bespoke scraping logic?
 Enable `CON5013_CRAWL4AI_INTEGRATION` and attach your custom crawler loggers with aliases such as `crawl4ai-mybot`. Implement custom commands (e.g., `crawl status`, `crawl restart`) that call into your scraping orchestration layer. The API Scanner remains independent, so you can monitor REST endpoints and scraping jobs from the same console.
 
 ## Deployment & Operations
 
-### Q14. Does Con5013 work behind Gunicorn or uWSGI with multiple workers?
+### Q15. Does Con5013 work behind Gunicorn or uWSGI with multiple workers?
 Yes, but shared state matters. Use a centralized backend for terminal command execution queues and log storage if workers are stateless. For streaming features, enable sticky sessions or run the console on a single worker via a sidecar Flask process that proxies to your main app.
 
-### Q15. What should I consider when deploying behind a reverse proxy (Nginx, Traefik)?
+### Q16. What should I consider when deploying behind a reverse proxy (Nginx, Traefik)?
 Forward WebSocket traffic for the terminal endpoint, set proper `X-Forwarded-*` headers so system metrics report client info accurately, and, if SSL termination happens at the proxy, configure Flask’s `PREFERRED_URL_SCHEME` so generated links point to HTTPS.
 
-### Q16. Can I run Con5013 in environments without internet access?
+### Q17. Can I run Con5013 in environments without internet access?
 Absolutely. All static assets ship with the package, and the Matrix demo app runs offline. Make sure your virtual environment has the dependencies pre-installed, or build a wheel in a connected environment and transport it to the air-gapped network.
 
-### Q17. How do I integrate Con5013 in CI pipelines?
+### Q18. How do I integrate Con5013 in CI pipelines?
 Use the API endpoints to trigger self-tests. For instance, spin up a Flask app in your CI job, call `/con5013/api/system/health` to verify the extension loaded, and hit `/con5013/api/scanner/test-all` for route validation. You can also run pytest suites against the demo Matrix app as part of regression checks.
 
-### Q18. Is it possible to script console actions from external tools?
+### Q19. Is it possible to script console actions from external tools?
 Yes. Every tab corresponds to REST APIs documented under `/con5013/api`. Script actions using HTTP clients, or integrate with observability platforms by exporting logs, system metrics, or API test reports in JSON. Authentication is left to your Flask app, so reuse existing tokens or session cookies.
 
