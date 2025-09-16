@@ -1,10 +1,10 @@
-﻿# Con5013 - Universal Flask Console Extension
+# Con5013 - Universal Flask Console Extension
 
-ðŸš€ **The Ultimate Flask Debugging and Monitoring Console**
+🚀 **The Ultimate Flask Debugging and Monitoring Console**
 
 Con5013 is a professional Flask console extension that provides a beautiful, glassmorphism-styled monitoring interface with real-time data display, logs, terminal, API scanning, and system monitoring capabilities. It is designed to be easy to install and use, and is compatible with Crawl4AI for advanced web scraping monitoring.
 
-## ðŸ§ª Quick Start (Local venv + Matrix Demo)
+## 🧪 Quick Start (Local venv + Matrix Demo)
 
 Run the package locally with a small Matrix-themed Flask app included in this repo.
 
@@ -21,13 +21,13 @@ python -m venv .venv
 pip install -r CON5013/requirements.txt
 ```
 
-3) Option A â€” Install the built wheel from this repo (recommended)
+3) Option A — Install the built wheel from this repo (recommended)
 
 ```
 pip install CON5013/dist/con5013-1.0.0-py3-none-any.whl
 ```
 
-3) Option B â€” Use the local source path (dev)
+3) Option B — Use the local source path (dev)
 
 If you prefer not to install the wheel, the demo app falls back to importing from
 `CON5013` when the package is not installed.
@@ -71,15 +71,15 @@ Include the JS once on pages where you want the overlay launcher:
 <script src="/con5013/static/js/con5013.js"></script>
 ```
 
-Thatâ€™s it. The console hotkey remains available too (Alt + C).
+That’s it. The console hotkey remains available too (Alt + C).
 
 Notes:
-- The JS auto-injects the Con5013 CSS if itâ€™s not already present.
+- The JS auto-injects the Con5013 CSS if it’s not already present.
 - Default `baseUrl` is `/con5013`. If you changed the URL prefix, initialize with `new Con5013Console({ baseUrl: '/your-prefix' })` or expose a global initializer.
 
 ### Custom Con5013 button
 
-If your page already has its own button, add the attribute below and it will toggle the overlay. When a custom button exists, the floating button wonâ€™t be rendered by default.
+If your page already has its own button, add the attribute below and it will toggle the overlay. When a custom button exists, the floating button won’t be rendered by default.
 
 ```
 <button data-con5013-button>Open Con5013</button>
@@ -106,9 +106,9 @@ new Con5013Console({
 });
 ```
 
-## ðŸ“œ Logging Integration
+## 📜 Logging Integration
 
-Con5013 captures logs from your application and external libraries so you can view them under the Console â†’ Logs tab.
+Con5013 captures logs from your application and external libraries so you can view them under the Console → Logs tab.
 
 ### What gets captured by default
 
@@ -185,37 +185,47 @@ logging.getLogger('crawl4ai').info('Crawl4AI log entry')  # shows under 'crawl4a
 
 Logs display timestamps, level badges, and messages. Use the Export button to download the current view.
 
-## âœ¨ Features
+## ✨ Features
 
-### ðŸŽ¯ **Core Functionality**
+### 🎯 **Core Functionality**
 - **Real-time Logs**: Monitor application logs with filtering and search
 - **Interactive Terminal**: Execute commands safely within your Flask app
 - **API Discovery**: Automatically discover and test all Flask endpoints
 - **System Monitoring**: Track CPU, memory, disk, and network usage
 - **Beautiful Interface**: Modern dark theme with professional styling
 
-### ðŸ”§ **Advanced Features**
+### 🔧 **Advanced Features**
 - **Overlay Mode**: Console opens over your app without disruption
 - **Hotkey Access**: Press `Alt + C` to toggle console anywhere
 - **Command History**: Navigate terminal history with arrow keys
 - **Real-time Updates**: Live monitoring with configurable intervals
 - **Export Capabilities**: Export logs, API results, and system reports
 
-### ðŸ•·ï¸ **Crawl4AI Integration**
+### 🕷️ **Crawl4AI Integration**
 - Enhanced monitoring for web scraping operations
 - Special terminal commands for Crawl4AI management
 - Scraping job monitoring and control
 - Performance metrics for crawling operations
 
-## ðŸš€ Quick Start
+## 🚀 Quick Start
 
 ### Installation
 
+You can install Con5013 from PyPI for the latest stable release or directly from GitHub for the freshest code.
+
 ```bash
+# Latest stable release from PyPI
 pip install con5013
 ```
 
+```bash
+# Install directly from GitHub
+pip install git+https://github.com/MindOrbit/CON5013.git
+```
+
 ### Basic Usage
+
+After installing the package (from PyPI or via the GitHub command above), integrate it into your Flask application:
 
 ```python
 from flask import Flask
@@ -230,7 +240,7 @@ if __name__ == '__main__':
     app.run(debug=True)
 ```
 
-That's it! Your Flask app now has a powerful console interface.
+That's it! Your Flask app now has a powerful console interface ready to use whether you installed from PyPI or directly from GitHub.
 
 ### Access Your Console
 
@@ -238,7 +248,7 @@ That's it! Your Flask app now has a powerful console interface.
 - **Overlay Mode**: Press `Ctrl + \`` anywhere in your app
 - **API Access**: Use `http://localhost:5000/con5013/api/*` endpoints
 
-## ðŸ“– Documentation
+## 📖 Documentation
 
 ### Configuration Options
 
@@ -279,7 +289,7 @@ All core modules are enabled by default. You can selectively disable modules at 
 
 - The corresponding tab is removed from the UI.
 - All related REST endpoints return HTTP 404 (hidden surface area).
-- Any dependent UI actions are hidden (e.g., the â€œRun in Terminalâ€ button disappears when Terminal is disabled).
+- Any dependent UI actions are hidden (e.g., the “Run in Terminal” button disappears when Terminal is disabled).
 
 Example:
 
@@ -314,34 +324,34 @@ console = Con5013(app, config={
 })
 ```
 
-## ðŸŽ¨ Interface Overview
+## 🎨 Interface Overview
 
-### ðŸ“Š **Logs Tab**
+### 📊 **Logs Tab**
 - Real-time application logs with timestamps
 - Color-coded log levels (INFO, WARNING, ERROR)
 - Search and filtering capabilities
 - Export functionality
 
-### ðŸ’» **Terminal Tab**
+### 💻 **Terminal Tab**
 - Interactive command-line interface
 - Built-in commands: `help`, `status`, `routes`, `config`, `logs`, `system`
 - Command history with arrow key navigation
 - Safe command execution environment
 
-### ðŸ” **API Tab**
+### 🔍 **API Tab**
 - Automatic Flask route discovery
 - Sequential endpoint testing
 - Performance metrics and response times
 - Beautiful results visualization
 - Export test results
 
-### ðŸ“ˆ **System Tab**
+### 📈 **System Tab**
 - Real-time CPU, memory, and disk monitoring
 - Application statistics and health status
 - Performance graphs and progress bars
 - System information and uptime tracking
 
-## ðŸ› ï¸ Advanced Usage
+## 🛠️ Advanced Usage
 
 ### Factory Pattern
 
@@ -390,7 +400,7 @@ console = Con5013(app, config={
 # - Performance metrics for crawling operations
 ```
 
-## ðŸŽ¯ Built-in Commands
+## 🎯 Built-in Commands
 
 ### General Commands
 - `help` - Show available commands
@@ -405,23 +415,23 @@ console = Con5013(app, config={
 - `crawl4ai-status` - Show Crawl4AI integration status
 - `crawl4ai-test [url]` - Test Crawl4AI functionality
 
-## ðŸ”§ API Endpoints
+## 🔧 API Endpoints
 
 Con5013 provides a REST API for programmatic access:
 
-- `GET /con5013/api/logs` â€” Get application logs
-- `GET /con5013/api/logs/sources` â€” List available log sources
-- `POST /con5013/api/logs/clear` â€” Clear logs for a source
-- `POST /con5013/api/terminal/execute` â€” Execute terminal command
-- `GET /con5013/api/terminal/commands` â€” List available terminal commands
-- `GET /con5013/api/terminal/history` â€” Terminal history
-- `GET /con5013/api/scanner/discover` â€” Discover Flask endpoints
-- `POST /con5013/api/scanner/test` â€” Test specific endpoint
-- `POST /con5013/api/scanner/test-all` â€” Test all endpoints
-- `GET /con5013/api/system/stats` â€” System statistics
-- `GET /con5013/api/system/health` â€” App/system health
+- `GET /con5013/api/logs` — Get application logs
+- `GET /con5013/api/logs/sources` — List available log sources
+- `POST /con5013/api/logs/clear` — Clear logs for a source
+- `POST /con5013/api/terminal/execute` — Execute terminal command
+- `GET /con5013/api/terminal/commands` — List available terminal commands
+- `GET /con5013/api/terminal/history` — Terminal history
+- `GET /con5013/api/scanner/discover` — Discover Flask endpoints
+- `POST /con5013/api/scanner/test` — Test specific endpoint
+- `POST /con5013/api/scanner/test-all` — Test all endpoints
+- `GET /con5013/api/system/stats` — System statistics
+- `GET /con5013/api/system/health` — App/system health
 
-## ðŸŽ¨ Customization
+## 🎨 Customization
 
 ### Custom Themes
 
@@ -442,28 +452,28 @@ def custom_log_processor(log_entry):
 console.log_monitor.add_processor(custom_log_processor)
 ```
 
-## ðŸ“¦ Requirements
+## 📦 Requirements
 
 - Python 3.7+
 - Flask 1.0+
 - Optional: psutil (for system monitoring)
 - Optional: crawl4ai (for enhanced web scraping features)
 
-## ðŸ¤ Contributing
+## 🤝 Contributing
 
 We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 
-## ðŸ“„ License
+## 📄 License
 
 MIT License - see [LICENSE](LICENSE) file for details.
 
-## ðŸ†˜ Support
+## 🆘 Support
 
-- ðŸ“– [Documentation](https://con5013.readthedocs.io)
-- ðŸ› [Issue Tracker](https://github.com/MindOrbit/CON5013/issues)
-- ðŸ’¬ [Discussions](https://github.com/MindOrbit/CON5013/discussions)
+- 📖 [Documentation](https://con5013.readthedocs.io)
+- 🐛 [Issue Tracker](https://github.com/MindOrbit/CON5013/issues)
+- 💬 [Discussions](https://github.com/MindOrbit/CON5013/discussions)
 
-## ðŸŒŸ Why Con5013?
+## 🌟 Why Con5013?
 
 - **Universal**: Works with any Flask application
 - **Beautiful**: Modern, professional interface
@@ -474,9 +484,9 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ---
 
-**Made with â¤ï¸ for the Flask community**
+**Made with ❤️ for the Flask community**
 
-Transform your Flask development experience with Con5013! ðŸš€
+Transform your Flask development experience with Con5013! 🚀
 
 
 
