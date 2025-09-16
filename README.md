@@ -152,6 +152,7 @@ Con5013(app, config={
 
 ```python
 from con5013 import Con5013
+import platform
 
 console = Con5013(app)
 
@@ -399,6 +400,72 @@ console = Con5013(app, config={
 # - Special terminal commands: crawl4ai-status, crawl4ai-test
 # - Performance metrics for crawling operations
 ```
+
+### Custom System Boxes
+
+Con5013's system monitor can be extended with additional cards so teams can surface
+application-specific metrics alongside built-in CPU, memory, and disk panels.
+
+```python
+from con5013 import Con5013
+import platform
+
+console = Con5013(app)
+
+console.add_system_box(
+    'runtime-insights',
+    title='Runtime Insights',
+    rows=[
+        {'name': 'Platform', 'value': platform.platform()},
+        {
+            'name': 'Active Jobs',
+            'value': '42%',
+            'progress': {
+                'value': 42,
+                'min': 0,
+                'max': 100,
+                'color_rules': [
+                    {'threshold': 80, 'class': 'error'},
+                    {'threshold': 60, 'class': 'warning'},
+                ],
+            },
+        },
+    ]
+)
+
+def cache_metrics_panel():
+    usage = get_cache_usage()
+    return {
+        'title': 'Cache',
+        'rows': [
+            {'name': 'Hits', 'value': usage['hits']},
+            {
+                'name': 'Utilization',
+                'value': f"{usage['percent']}%",
+                'progress': {
+                    'value': usage['percent'],
+                    'min': 0,
+                    'max': 100,
+                    'color_rules': [
+                        {'threshold': 90, 'class': 'error'},
+                        {'threshold': 75, 'class': 'warning'},
+                    ],
+                },
+            },
+        ],
+    }
+
+console.add_system_box('cache', provider=cache_metrics_panel)
+
+# Boxes can be toggled or removed later
+console.set_system_box_enabled('cache', False)
+console.remove_system_box('runtime-insights')
+```
+
+Each row accepts a `name`, `value`, and optional `progress` configuration. Progress bars support
+`min`, `max`, and custom colour rules based on thresholds, mirroring the styling used by the built-in
+CPU, memory, and storage cards. Static definitions can also be provided via the
+`CON5013_SYSTEM_CUSTOM_BOXES` configuration key.
 
 ## 🎯 Built-in Commands
 

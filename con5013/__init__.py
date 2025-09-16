@@ -15,13 +15,18 @@ __author__ = "Con5013 Team"
 __license__ = "MIT"
 
 import logging
+import re
 import time
+from collections import OrderedDict
+from typing import Any, Callable, Dict, Iterable, List, Optional, Union
+
 from flask import Flask
+
 from .blueprint import con5013_blueprint
-from .core.log_monitor import LogMonitor
-from .core.terminal_engine import TerminalEngine
 from .core.api_scanner import APIScanner
+from .core.log_monitor import LogMonitor
 from .core.system_monitor import SystemMonitor
+from .core.terminal_engine import TerminalEngine
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -64,6 +69,9 @@ class Con5013:
         self.api_scanner = None
         self.system_monitor = None
         
+        # Registry for custom system monitor boxes
+        self._system_boxes: "OrderedDict[str, Dict[str, Any]]" = OrderedDict()
+
         if app is not None:
             self.init_app(app)
     
@@ -106,6 +114,7 @@ class Con5013:
             'CON5013_MONITOR_DISK': True,
             'CON5013_MONITOR_NETWORK': True,
             'CON5013_MONITOR_GPU': True,
+            'CON5013_SYSTEM_CUSTOM_BOXES': [],
             
             # UI configuration
             'CON5013_ASCII_ART': True,
@@ -151,7 +160,10 @@ class Con5013:
         
         # Initialize core components
         self._initialize_components()
-        
+
+        # Load system boxes defined via configuration after core components
+        self._load_configured_system_boxes()
+
         # Register blueprint
         app.register_blueprint(
             con5013_blueprint,
@@ -289,14 +301,323 @@ class Con5013:
     
     def get_system_stats(self):
         """Get current system statistics."""
-        if self.system_monitor:
-            return self.system_monitor.get_current_stats()
-        return {}
-    
+        stats = self.system_monitor.get_current_stats() if self.system_monitor else {}
+        custom_boxes = self._collect_system_boxes()
+        if custom_boxes:
+            stats['custom_boxes'] = custom_boxes
+        return stats
+
     def add_custom_command(self, name, handler, description=""):
         """Add a custom terminal command."""
         if self.terminal_engine:
             self.terminal_engine.add_command(name, handler, description)
+
+    # ------------------------------------------------------------------
+    # Custom system monitor boxes
+    # ------------------------------------------------------------------
+    def add_system_box(self, box_id: Optional[str] = None, *, title: Optional[str] = None,
+                       rows: Optional[Iterable[Any]] = None, provider: Optional[Callable[[], Dict[str, Any]]] = None,
+                       enabled: Union[Callable[[], bool], bool, None] = True, order: Optional[int] = None,
+                       description: Optional[str] = None) -> str:
+        """Register a custom system monitor box.
+
+        Parameters
+        ----------
+        box_id:
+            Optional unique identifier for the box. If omitted, an ID is generated from the title.
+        title:
+            Title displayed on the card. Required when ``box_id`` is not provided.
+        rows:
+            Iterable of row definitions describing the metrics to render. Each row can be a dict or callable.
+        provider:
+            Optional callable returning a dictionary with dynamic box data. When provided, the callable can
+            override fields such as ``title`` or ``rows`` on every refresh.
+        enabled:
+            Boolean or callable evaluated on each refresh to determine whether the box should be visible.
+        order:
+            Optional integer used to control ordering amongst custom boxes. Lower numbers render first.
+        description:
+            Optional descriptive text surfaced through the API for consumers that need metadata.
+
+        Returns
+        -------
+        str
+            The identifier of the registered box.
+        """
+
+        if box_id is None and not title:
+            raise ValueError("A system box requires a title or explicit box_id")
+
+        box_key = self._slugify(box_id or title)
+
+        self._system_boxes[box_key] = {
+            'id': box_key,
+            'title': title,
+            'rows': rows,
+            'provider': provider,
+            'enabled': enabled,
+            'order': order,
+            'description': description,
+        }
+        return box_key
+
+    def remove_system_box(self, box_id: str) -> None:
+        """Remove a previously registered system box."""
+        if not box_id:
+            return
+        self._system_boxes.pop(box_id, None)
+
+    def set_system_box_enabled(self, box_id: str, enabled: bool) -> None:
+        """Enable or disable a registered system box."""
+        if not box_id or box_id not in self._system_boxes:
+            return
+        self._system_boxes[box_id]['enabled'] = bool(enabled)
+
+    # Internal helpers -------------------------------------------------
+    def _load_configured_system_boxes(self) -> None:
+        """Register system boxes defined through configuration."""
+        config_boxes = self.config.get('CON5013_SYSTEM_CUSTOM_BOXES') or []
+        for index, raw in enumerate(config_boxes):
+            if isinstance(raw, dict):
+                data = dict(raw)
+            else:
+                # Allow simple tuples/lists such as (title, rows)
+                data = {}
+                if isinstance(raw, (list, tuple)) and raw:
+                    data['title'] = raw[0]
+                    if len(raw) > 1:
+                        data['rows'] = raw[1]
+            if not data:
+                continue
+            box_id = data.pop('id', None) or data.pop('box_id', None)
+            title = data.pop('title', None)
+            self.add_system_box(box_id, title=title, **data)
+
+    def _collect_system_boxes(self) -> List[Dict[str, Any]]:
+        """Build serializable payload for registered system boxes."""
+        boxes: List[Dict[str, Any]] = []
+        for _, entry in self._system_boxes.items():
+            normalized = self._normalize_system_box(entry)
+            if normalized:
+                boxes.append(normalized)
+        boxes.sort(key=lambda b: (b.get('order') if b.get('order') is not None else 1_000_000, b.get('title', '')))
+        return boxes
+
+    def _normalize_system_box(self, entry: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Normalize a single system box definition."""
+        if not entry:
+            return None
+
+        enabled = entry.get('enabled', True)
+        try:
+            if callable(enabled):
+                enabled = bool(enabled())
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logger.exception("Error evaluating system box enabled state: %s", exc)
+            enabled = False
+        if not enabled:
+            return None
+
+        provider = entry.get('provider')
+        dynamic_data: Dict[str, Any] = {}
+        if callable(provider):
+            try:
+                provided = provider() or {}
+                if isinstance(provided, dict):
+                    dynamic_data = provided
+            except Exception as exc:  # pragma: no cover - defensive logging
+                logger.exception("Error evaluating system box provider: %s", exc)
+                dynamic_data = {'error': str(exc)}
+        elif isinstance(provider, dict):
+            dynamic_data = dict(provider)
+
+        # Merge static and dynamic data (dynamic data takes precedence)
+        title = dynamic_data.get('title') or entry.get('title') or entry.get('id')
+        order = dynamic_data.get('order') if dynamic_data.get('order') is not None else entry.get('order')
+        description = dynamic_data.get('description') or entry.get('description')
+
+        rows_source = dynamic_data.get('rows', entry.get('rows'))
+        normalized_rows = self._normalize_system_rows(rows_source)
+
+        # If provider returned an explicit enabled flag, respect it
+        provided_enabled = dynamic_data.get('enabled')
+        if provided_enabled is not None and not provided_enabled:
+            return None
+
+        payload = {
+            'id': entry.get('id'),
+            'title': title,
+            'rows': normalized_rows,
+        }
+        if order is not None:
+            payload['order'] = order
+        if description:
+            payload['description'] = description
+        if dynamic_data.get('meta'):
+            payload['meta'] = dynamic_data['meta']
+        if dynamic_data.get('error'):
+            payload['error'] = str(dynamic_data['error'])
+        return payload
+
+    def _normalize_system_rows(self, rows: Optional[Iterable[Any]]) -> List[Dict[str, Any]]:
+        """Normalize a collection of row specifications."""
+        normalized: List[Dict[str, Any]] = []
+        if rows is None:
+            return normalized
+
+        for index, raw in enumerate(rows):
+            row = raw
+            if callable(row):
+                try:
+                    row = row()
+                except Exception as exc:  # pragma: no cover - defensive logging
+                    logger.exception("Error evaluating system box row callable: %s", exc)
+                    continue
+            if not isinstance(row, dict):
+                if row is None:
+                    continue
+                row = {'name': str(row), 'value': ''}
+
+            name = row.get('name') or row.get('label')
+            if not name:
+                continue
+
+            row_id = row.get('id') or f"{self._slugify(name)}-{index}"
+
+            value = row.get('value')
+            if callable(value):
+                try:
+                    value = value()
+                except Exception as exc:  # pragma: no cover - defensive logging
+                    logger.exception("Error evaluating system row value: %s", exc)
+                    value = None
+            display_value = row.get('display_value')
+            if callable(display_value):
+                try:
+                    display_value = display_value()
+                except Exception as exc:  # pragma: no cover - defensive logging
+                    logger.exception("Error evaluating system row display value: %s", exc)
+                    display_value = None
+
+            normalized_row: Dict[str, Any] = {
+                'id': row_id,
+                'name': str(name),
+                'value': '' if value is None else str(value),
+            }
+            if display_value is not None:
+                normalized_row['display_value'] = str(display_value)
+
+            progress_spec = self._normalize_progress_spec(row.get('progress'))
+            if progress_spec:
+                normalized_row['progress'] = progress_spec
+
+            if 'divider' in row:
+                normalized_row['divider'] = bool(row['divider'])
+
+            if row.get('meta') is not None:
+                normalized_row['meta'] = row['meta']
+
+            normalized.append(normalized_row)
+
+        return normalized
+
+    def _normalize_progress_spec(self, spec: Any) -> Optional[Dict[str, Any]]:
+        """Normalize progress bar configuration for a row."""
+        if spec is None:
+            return None
+        progress = spec
+        if callable(progress):
+            try:
+                progress = progress()
+            except Exception as exc:  # pragma: no cover - defensive logging
+                logger.exception("Error evaluating progress spec: %s", exc)
+                return None
+        if not isinstance(progress, dict):
+            return None
+
+        value = progress.get('value')
+        if callable(value):
+            try:
+                value = value()
+            except Exception as exc:  # pragma: no cover - defensive logging
+                logger.exception("Error evaluating progress value: %s", exc)
+                value = None
+        try:
+            numeric_value = float(value)
+        except (TypeError, ValueError):
+            return None
+
+        min_value = progress.get('min', 0)
+        max_value = progress.get('max', 100)
+        try:
+            min_value = float(min_value)
+        except (TypeError, ValueError):
+            min_value = 0.0
+        try:
+            max_value = float(max_value)
+        except (TypeError, ValueError):
+            max_value = max(min_value + 1.0, 100.0)
+        if max_value == min_value:
+            max_value = min_value + 1.0
+
+        payload: Dict[str, Any] = {
+            'value': numeric_value,
+            'min': min_value,
+            'max': max_value,
+        }
+
+        if 'display_value' in progress and progress['display_value'] is not None:
+            payload['display_value'] = str(progress['display_value'])
+
+        color = progress.get('color')
+        if color:
+            payload['color'] = str(color)
+
+        color_rules: List[Dict[str, Any]] = []
+        for rule in progress.get('color_rules', []) or []:
+            entry = rule
+            if callable(entry):
+                try:
+                    entry = entry()
+                except Exception as exc:  # pragma: no cover - defensive logging
+                    logger.exception("Error evaluating progress color rule: %s", exc)
+                    continue
+            if not isinstance(entry, dict):
+                continue
+            threshold = entry.get('threshold')
+            try:
+                threshold_value = float(threshold)
+            except (TypeError, ValueError):
+                continue
+            color_class = entry.get('class') or entry.get('color')
+            operator = (entry.get('operator') or 'gte').lower()
+            color_rules.append({
+                'threshold': threshold_value,
+                'class': str(color_class) if color_class else None,
+                'operator': operator,
+            })
+        if color_rules:
+            payload['color_rules'] = color_rules
+
+        if 'divider' in progress:
+            payload['divider'] = bool(progress['divider'])
+        if 'tooltip' in progress and progress['tooltip'] is not None:
+            payload['tooltip'] = str(progress['tooltip'])
+
+        if 'precision' in progress and progress['precision'] is not None:
+            try:
+                payload['precision'] = int(progress['precision'])
+            except (TypeError, ValueError):
+                pass
+
+        return payload
+
+    def _slugify(self, value: Optional[str]) -> str:
+        """Generate a safe identifier for dynamic system boxes."""
+        if not value:
+            return f"box-{len(self._system_boxes) + 1}"
+        slug = re.sub(r'[^a-zA-Z0-9]+', '-', str(value)).strip('-').lower()
+        return slug or f"box-{len(self._system_boxes) + 1}"
     
     def add_log_source(self, source_name, source_path):
         """Add a new log source to monitor."""
