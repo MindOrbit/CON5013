@@ -315,6 +315,73 @@
     margin-bottom: 20px;
 }
 
+.con5013-dropdown {
+    position: relative;
+}
+
+.con5013-dropdown .con5013-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.con5013-dropdown.open .con5013-dropdown-menu {
+    display: block;
+}
+
+.con5013-dropdown-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    background: var(--con5013-dark);
+    border: 1px solid var(--con5013-border);
+    border-radius: 8px;
+    min-width: 180px;
+    box-shadow: 0 14px 28px rgba(0, 0, 0, 0.45);
+    padding: 8px 0;
+    display: none;
+    z-index: 2000;
+}
+
+.con5013-dropdown-item {
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: var(--con5013-text);
+    padding: 8px 14px;
+    text-align: left;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.con5013-dropdown-item:hover,
+.con5013-dropdown-item:focus {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.con5013-dropdown-check {
+    width: 16px;
+    color: var(--con5013-success);
+    opacity: 0;
+    font-weight: 600;
+    text-align: center;
+    transition: opacity 0.2s ease;
+}
+
+.con5013-dropdown-item.active .con5013-dropdown-check {
+    opacity: 1;
+}
+
+.con5013-filter-summary {
+    color: var(--con5013-text-muted);
+    font-size: 12px;
+    font-weight: 500;
+}
+
 .con5013-btn {
     background: var(--con5013-primary);
     color: white;
@@ -468,6 +535,11 @@
     gap: 12px;
 }
 
+.con5013-endpoint-note {
+    font-size: 12px;
+    color: var(--con5013-text-muted);
+}
+
 .con5013-status-indicator {
     width: 12px;
     height: 12px;
@@ -564,6 +636,8 @@
 .con5013-badge.ok { border-color: var(--con5013-success); color: var(--con5013-success); }
 .con5013-badge.warning { border-color: var(--con5013-warning); color: var(--con5013-warning); }
 .con5013-badge.error { border-color: var(--con5013-error); color: var(--con5013-error); }
+.con5013-badge.system { border-color: var(--con5013-info); color: var(--con5013-info); }
+.con5013-badge.excluded { border-color: var(--con5013-warning); color: var(--con5013-warning); }
 
 /* Progress Bars */
 .con5013-progress {

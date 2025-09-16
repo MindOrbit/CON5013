@@ -27,6 +27,12 @@ class Con5013Console {
         this.terminalHistory = [];
         this.terminalHistoryIndex = -1;
         this.endpoints = [];
+        this.apiFilters = { active: true, excluded: false, system: false };
+        this.apiTestResults = [];
+        this.apiSummary = null;
+        this.apiVisibleEndpoints = [];
+        this.consolePrefix = (this.options.baseUrl || '/con5013').replace(/\/+$/, '') || '/con5013';
+        this.apiFilterElements = { dropdown: null, toggle: null, menu: null, summary: null };
         this.systemStats = {};
         this.features = {
             logs: true,
@@ -54,6 +60,7 @@ class Con5013Console {
         this.createFloatingButton();
         this.bindEvents();
         this.setupHotkey();
+        this.updateApiFilterSummary();
         this.loadInitialData();
         
         // Start periodic updates
@@ -218,6 +225,25 @@ class Con5013Console {
                                     <button class="con5013-btn" onclick="con5013.discoverEndpoints()">Discover</button>
                                     <button class="con5013-btn" onclick="con5013.testAllEndpoints()">Test All</button>
                                     <button class="con5013-btn secondary" onclick="con5013.exportApiResults()">Export</button>
+                                    <div class="con5013-dropdown" id="con5013-api-filter-dropdown">
+                                        <button class="con5013-btn secondary" id="con5013-api-filter-toggle" type="button">
+                                            Filters <span class="con5013-filter-summary" id="con5013-api-filter-summary">Active</span>
+                                        </button>
+                                        <div class="con5013-dropdown-menu" id="con5013-api-filter-menu">
+                                            <button class="con5013-dropdown-item active" data-filter="active">
+                                                <span class="con5013-dropdown-check">✔</span>
+                                                Active
+                                            </button>
+                                            <button class="con5013-dropdown-item" data-filter="excluded">
+                                                <span class="con5013-dropdown-check">✔</span>
+                                                Excluded
+                                            </button>
+                                            <button class="con5013-dropdown-item" data-filter="system">
+                                                <span class="con5013-dropdown-check">✔</span>
+                                                System
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                                 
                                 <div id="con5013-api-stats" class="con5013-api-stats">
@@ -494,6 +520,35 @@ class Con5013Console {
         document.getElementById('con5013-overlay').addEventListener('click', (e) => {
             if (e.target.id === 'con5013-overlay') {
                 this.close();
+            }
+        });
+
+        const apiFilterDropdown = document.getElementById('con5013-api-filter-dropdown');
+        const apiFilterToggle = document.getElementById('con5013-api-filter-toggle');
+        const apiFilterMenu = document.getElementById('con5013-api-filter-menu');
+        const apiFilterSummary = document.getElementById('con5013-api-filter-summary');
+        this.apiFilterElements = { dropdown: apiFilterDropdown, toggle: apiFilterToggle, menu: apiFilterMenu, summary: apiFilterSummary };
+
+        if (apiFilterToggle && apiFilterDropdown) {
+            apiFilterToggle.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                apiFilterDropdown.classList.toggle('open');
+            });
+        }
+        if (apiFilterMenu && apiFilterDropdown) {
+            apiFilterMenu.querySelectorAll('[data-filter]').forEach(item => {
+                item.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const filter = item.getAttribute('data-filter');
+                    this.toggleApiFilter(filter);
+                });
+            });
+        }
+        document.addEventListener('click', (event) => {
+            if (apiFilterDropdown && !apiFilterDropdown.contains(event.target)) {
+                apiFilterDropdown.classList.remove('open');
             }
         });
     }
@@ -978,16 +1033,91 @@ class Con5013Console {
         
         input.value = this.terminalHistory[this.terminalHistoryIndex] || '';
     }
-    
+
     // API functionality
+    isSystemEndpoint(rule, endpointName) {
+        const cleanRule = rule || '';
+        const name = endpointName || '';
+        const prefix = this.consolePrefix;
+        if (prefix && prefix !== '/' && cleanRule.startsWith(prefix)) return true;
+        if (cleanRule.startsWith('/con5013/')) return true;
+        if (name.includes('con5013')) return true;
+        return false;
+    }
+
+    categorizeEndpoint(endpoint) {
+        if (endpoint && endpoint.protected) return 'excluded';
+        const rule = endpoint?.rule || endpoint?.url || '';
+        const name = endpoint?.endpoint || '';
+        if (this.isSystemEndpoint(rule, name)) return 'system';
+        return 'active';
+    }
+
+    updateApiFilterSummary() {
+        const labels = { active: 'Active', excluded: 'Excluded', system: 'System' };
+        const menu = this.apiFilterElements?.menu;
+        const summary = this.apiFilterElements?.summary;
+        if (menu) {
+            menu.querySelectorAll('[data-filter]').forEach(item => {
+                const key = item.getAttribute('data-filter');
+                if (!key) return;
+                if (this.apiFilters[key]) item.classList.add('active');
+                else item.classList.remove('active');
+            });
+        }
+        if (summary) {
+            const enabled = Object.entries(this.apiFilters)
+                .filter(([, enabled]) => enabled)
+                .map(([key]) => labels[key] || key);
+            summary.textContent = enabled.length ? enabled.join(', ') : 'None';
+        }
+    }
+
+    applyApiFilters() {
+        const endpoints = Array.isArray(this.endpoints) ? this.endpoints : [];
+        const filtered = endpoints.filter(ep => this.apiFilters[(ep && ep.category) || this.categorizeEndpoint(ep)]);
+        this.apiVisibleEndpoints = filtered;
+        this.displayEndpoints(filtered);
+        this.reapplyApiResults();
+        this.updateApiStats();
+        this.updateApiFilterSummary();
+    }
+
+    reapplyApiResults() {
+        if (!Array.isArray(this.apiTestResults)) return;
+        this.apiTestResults.forEach(result => {
+            const id = `status-${(result.endpoint || '').replace(/[^a-zA-Z0-9]/g, '')}`;
+            const indicator = document.getElementById(id);
+            if (indicator) {
+                indicator.className = `con5013-status-indicator ${result.status === 'success' ? 'success' : 'error'}`;
+            }
+        });
+    }
+
+    toggleApiFilter(filter) {
+        if (!filter || !(filter in this.apiFilters)) return;
+        this.apiFilters[filter] = !this.apiFilters[filter];
+        this.updateApiFilterSummary();
+        if (filter === 'system') {
+            this.discoverEndpoints();
+        } else {
+            this.applyApiFilters();
+        }
+        if (this.apiFilterElements && this.apiFilterElements.dropdown) {
+            this.apiFilterElements.dropdown.classList.remove('open');
+        }
+    }
+
     async discoverEndpoints() {
         try {
-            const response = await fetch(`${this.options.baseUrl}/api/scanner/discover`);
+            const includeSystem = !!this.apiFilters.system;
+            const response = await fetch(`${this.options.baseUrl}/api/scanner/discover?include_con5013=${includeSystem ? 'true' : 'false'}`);
             const payload = await response.json();
             const endpoints = payload && payload.endpoints ? payload.endpoints : [];
-            this.endpoints = endpoints;
-            this.displayEndpoints(endpoints);
-            this.updateApiStats();
+            this.endpoints = endpoints.map(ep => ({ ...ep, category: this.categorizeEndpoint(ep) }));
+            this.apiTestResults = [];
+            this.apiSummary = null;
+            this.applyApiFilters();
             this.setConnectivity(true);
         } catch (error) {
             console.error('Error discovering endpoints:', error);
@@ -998,16 +1128,23 @@ class Con5013Console {
     displayEndpoints(endpoints) {
         const container = document.getElementById('con5013-endpoints');
         if (!container) return;
-        
+
         if (endpoints.length === 0) {
             container.innerHTML = '<div style="padding: 40px; text-align: center; color: #9ca3af;">No endpoints found</div>';
             return;
         }
-        
+
         const endpointsHTML = endpoints.map(endpoint => {
+            const category = endpoint.category || this.categorizeEndpoint(endpoint);
             const termBtn = this.features.terminal
                 ? `<button class="con5013-btn secondary" onclick="con5013.runEndpointInTerminal('${(endpoint.sample_path || endpoint.rule).replace(/'/g, "\'")}', '${endpoint.methods[0]}')">Run in Terminal</button>`
                 : '';
+            const badge = category === 'system'
+                ? '<span class="con5013-badge system">System</span>'
+                : (category === 'excluded' ? '<span class="con5013-badge excluded">Excluded</span>' : '');
+            const testControls = endpoint.protected
+                ? '<span class="con5013-endpoint-note">Tests disabled</span>'
+                : `<button class="con5013-btn" onclick="con5013.testEndpoint('${(endpoint.sample_path || endpoint.rule).replace(/'/g, "\'")}', '${endpoint.methods[0]}')">Test</button>${termBtn ? ` ${termBtn}` : ''}`;
             return `
             <div class="con5013-endpoint">
                 <div class="con5013-endpoint-info">
@@ -1017,13 +1154,13 @@ class Con5013Console {
                     </div>
                 </div>
                 <div class="con5013-endpoint-status">
+                    ${badge}
                     <div class="con5013-status-indicator" id="status-${endpoint.rule.replace(/[^a-zA-Z0-9]/g, '')}"></div>
-                    <button class="con5013-btn" onclick="con5013.testEndpoint('${(endpoint.sample_path || endpoint.rule).replace(/'/g, "\'")}', '${endpoint.methods[0]}')">Test</button>
-                    ${termBtn}
+                    ${testControls}
                 </div>
             </div>`;
         }).join('');
-        
+
         container.innerHTML = endpointsHTML;
     }
     
@@ -1059,7 +1196,8 @@ class Con5013Console {
     
     async testAllEndpoints() {
         try {
-            const response = await fetch(`${this.options.baseUrl}/api/scanner/test-all`, { method: 'POST' });
+            const includeSystem = !!this.apiFilters.system;
+            const response = await fetch(`${this.options.baseUrl}/api/scanner/test-all?include_con5013=${includeSystem ? 'true' : 'false'}`, { method: 'POST' });
             const payload = await response.json();
             const results = payload && payload.results ? payload.results : payload;
             this.displayTestResults(results);
@@ -1074,13 +1212,10 @@ class Con5013Console {
     displayTestResults(results) {
         // Accept either the aggregated results object or just the payload
         const list = Array.isArray(results) ? results : (results && results.results ? results.results : []);
-        // Update status indicators based on results
-        list.forEach(result => {
-            const statusIndicator = document.querySelector(`#status-${result.endpoint.replace(/[^a-zA-Z0-9]/g, '')}`);
-            if (statusIndicator) {
-                statusIndicator.className = `con5013-status-indicator ${result.status === 'success' ? 'success' : 'error'}`;
-            }
-        });
+        if (Array.isArray(list)) {
+            this.apiTestResults = list;
+        }
+        this.reapplyApiResults();
     }
 
     async runEndpointInTerminal(pathOrUrl, method) {
@@ -1101,24 +1236,70 @@ class Con5013Console {
     
     updateApiStats(results = null) {
         if (results) {
-            const agg = results && results.total_endpoints !== undefined ? results : (results.results ? results : null);
-            const stats = agg && agg.total_endpoints !== undefined ? agg : (agg ? agg.results : null);
-            if (stats) {
-                document.getElementById('total-endpoints').textContent = stats.total_endpoints || 0;
-                document.getElementById('working-endpoints').textContent = stats.successful_tests || 0;
-                document.getElementById('failed-endpoints').textContent = stats.failed_tests || 0;
-                document.getElementById('avg-response-time').textContent = `${Math.round(stats.average_response_time || 0)}ms`;
-                return;
+            const list = Array.isArray(results) ? results : (results && results.results ? results.results : []);
+            if (Array.isArray(list)) {
+                this.apiTestResults = list;
             }
-            // Fallback to counting endpoints if stats not available
-            document.getElementById('total-endpoints').textContent = this.endpoints.length;
-        } else {
-            document.getElementById('total-endpoints').textContent = this.endpoints.length;
+            if (results && !Array.isArray(results)) {
+                this.apiSummary = results;
+            }
         }
+
+        const totalEl = document.getElementById('total-endpoints');
+        const workingEl = document.getElementById('working-endpoints');
+        const failedEl = document.getElementById('failed-endpoints');
+        const avgEl = document.getElementById('avg-response-time');
+
+        if (totalEl) {
+            totalEl.textContent = this.apiVisibleEndpoints.length;
+        }
+
+        if (!workingEl || !failedEl || !avgEl) {
+            return;
+        }
+
+        const visibleRules = new Set((this.apiVisibleEndpoints || []).map(ep => ep.rule));
+        const resultsList = Array.isArray(this.apiTestResults) ? this.apiTestResults : [];
+        let success = 0;
+        let fail = 0;
+        let totalTime = 0;
+        let count = 0;
+
+        resultsList.forEach(result => {
+            if (!visibleRules.has(result.endpoint)) return;
+            count += 1;
+            if (result.status === 'success') success += 1;
+            else fail += 1;
+            totalTime += Number(result.response_time_ms || 0);
+        });
+
+        workingEl.textContent = success;
+        failedEl.textContent = fail;
+        avgEl.textContent = count ? `${Math.round(totalTime / count)}ms` : '--';
     }
     
     exportApiResults() {
-        alert('Export API results functionality - to be implemented');
+        try {
+            const payload = {
+                generated_at: new Date().toISOString(),
+                filters: { ...this.apiFilters },
+                endpoints: this.endpoints,
+                visible_endpoints: this.apiVisibleEndpoints,
+                test_results: this.apiTestResults,
+                summary: this.apiSummary
+            };
+            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `con5013-api-${Date.now()}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error('Error exporting API results:', error);
+        }
     }
     
     // System functionality

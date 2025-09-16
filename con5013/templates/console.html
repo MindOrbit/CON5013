@@ -166,6 +166,96 @@
             gap: 8px;
         }
 
+        .console-dropdown {
+            position: relative;
+        }
+
+        .console-dropdown .dropdown-toggle {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .console-dropdown.open .dropdown-menu {
+            display: block;
+        }
+
+        .dropdown-menu {
+            position: absolute;
+            top: calc(100% + 6px);
+            right: 0;
+            background: var(--console-surface);
+            border: 1px solid var(--console-border);
+            border-radius: 8px;
+            min-width: 180px;
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+            padding: 6px 0;
+            display: none;
+            z-index: 30;
+        }
+
+        .dropdown-item {
+            width: 100%;
+            background: transparent;
+            border: none;
+            color: var(--console-text);
+            padding: 8px 14px;
+            text-align: left;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .dropdown-item:hover,
+        .dropdown-item:focus {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .dropdown-item .dropdown-check {
+            width: 16px;
+            text-align: center;
+            color: var(--console-accent);
+            font-weight: 600;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .dropdown-item.active .dropdown-check {
+            opacity: 1;
+        }
+
+        .filter-summary {
+            color: var(--console-text-muted);
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .category-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            border: 1px solid var(--console-border);
+            padding: 2px 8px;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            margin-right: 8px;
+        }
+
+        .category-badge.system {
+            border-color: var(--console-info);
+            color: var(--console-info);
+        }
+
+        .category-badge.excluded {
+            border-color: var(--console-warning);
+            color: var(--console-warning);
+        }
+
         .panel-body {
             flex: 1;
             padding: 20px 25px;
@@ -548,16 +638,34 @@
                             API Scanner
                         </h2>
                         <div class="panel-controls">
-                            <button class="console-btn" id="api-scan-btn" onclick="scanEndpoints()">
-                                Scan
+                            <button class="console-btn" id="api-discover-btn" onclick="discoverEndpoints()">
+                                Discover
                             </button>
                             <button class="console-btn" id="api-testall-btn" onclick="testAllEndpoints()">
                                 Test All
                             </button>
-                            <label class="console-btn ms-2" style="display:flex; align-items:center; gap:8px; margin:0;">
-                                <input type="checkbox" id="api-include-con5013" checked style="margin:0;"> 
-                                <span style="line-height:1;">Include Con5013</span>
-                            </label>
+                            <button class="console-btn" id="api-export-btn" onclick="exportApiData()">
+                                Export
+                            </button>
+                            <div class="console-dropdown" id="api-filter-dropdown">
+                                <button class="console-btn dropdown-toggle" id="api-filter-toggle" type="button">
+                                    Filters <span class="filter-summary" id="api-filter-summary">Active</span>
+                                </button>
+                                <div class="dropdown-menu" id="api-filter-menu">
+                                    <button type="button" class="dropdown-item active" data-filter="active">
+                                        <span class="dropdown-check">✔</span>
+                                        Active
+                                    </button>
+                                    <button type="button" class="dropdown-item" data-filter="excluded">
+                                        <span class="dropdown-check">✔</span>
+                                        Excluded
+                                    </button>
+                                    <button type="button" class="dropdown-item" data-filter="system">
+                                        <span class="dropdown-check">✔</span>
+                                        System
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div class="panel-body">
@@ -565,13 +673,13 @@
                             <div class="col-md-3">
                                 <div class="metric-card">
                                     <div class="metric-value" id="api-total">0</div>
-                                    <div class="metric-label">Endpoints</div>
+                                    <div class="metric-label">Total Endpoints</div>
                                 </div>
                             </div>
                             <div class="col-md-3">
                                 <div class="metric-card">
                                     <div class="metric-value text-success" id="api-ok">0</div>
-                                    <div class="metric-label">OK</div>
+                                    <div class="metric-label">Working</div>
                                 </div>
                             </div>
                             <div class="col-md-3">
@@ -1232,30 +1340,73 @@
 
         // API Scanner logic
         const API_BASE = CON5013_CONFIG.CON5013_URL_PREFIX;
-        const apiScanBtn = document.getElementById('api-scan-btn');
-        const apiTestAllBtn = document.getElementById('api-testall-btn');
         const endpointsList = document.getElementById('endpoints-list');
         const apiTotalEl = document.getElementById('api-total');
         const apiOkEl = document.getElementById('api-ok');
         const apiFailEl = document.getElementById('api-fail');
         const apiAvgEl = document.getElementById('api-avg');
-
-        async function loadEndpoints() {
-            try {
-                const includeCon = document.getElementById('api-include-con5013')?.checked;
-                const r = await fetch(`${API_BASE}/api/scanner/discover?include_con5013=${includeCon ? 'true' : 'false'}`);
-                const d = await r.json();
-                if (d.status === 'success') {
-                    const eps = d.endpoints || [];
-                    renderEndpoints(eps);
-                    apiTotalEl && (apiTotalEl.textContent = eps.length);
-                    // Immediately test all to populate metrics and per-endpoint status
-                    await testAllEndpointsUI();
-                }
-            } catch (e) { console.error('Failed to discover endpoints', e); }
-        }
+        const filterDropdown = document.getElementById('api-filter-dropdown');
+        const filterToggle = document.getElementById('api-filter-toggle');
+        const filterMenu = document.getElementById('api-filter-menu');
+        const filterSummary = document.getElementById('api-filter-summary');
+        const filterLabels = { active: 'Active', excluded: 'Excluded', system: 'System' };
+        const consolePrefix = (CON5013_CONFIG.CON5013_URL_PREFIX || '/con5013').replace(/\/+$/, '') || '/con5013';
+        const apiFilters = { active: true, excluded: false, system: false };
+        let allEndpoints = [];
+        let visibleEndpoints = [];
+        let latestTestResults = [];
+        let latestSummary = null;
+        let isLoadingEndpoints = false;
+        let isTestingAll = false;
 
         function slugify(s){ return String(s||'').replace(/[^a-zA-Z0-9]/g,'_'); }
+
+        function isSystemRule(rule, endpointName) {
+            const cleanRule = String(rule || '');
+            if (!cleanRule) return false;
+            const name = String(endpointName || '');
+            if (consolePrefix && consolePrefix !== '/' && cleanRule.startsWith(consolePrefix)) return true;
+            if (cleanRule.startsWith('/con5013/')) return true;
+            if (name.includes('con5013')) return true;
+            return false;
+        }
+
+        function categorizeEndpoint(endpoint) {
+            if (endpoint && endpoint.protected) return 'excluded';
+            const rule = endpoint?.rule || endpoint?.url || '';
+            const name = endpoint?.endpoint || '';
+            if (isSystemRule(rule, name)) return 'system';
+            return 'active';
+        }
+
+        function updateFilterSummary() {
+            if (filterMenu) {
+                filterMenu.querySelectorAll('.dropdown-item').forEach(item => {
+                    const key = item.getAttribute('data-filter');
+                    if (!key) return;
+                    if (apiFilters[key]) item.classList.add('active');
+                    else item.classList.remove('active');
+                });
+            }
+            if (filterSummary) {
+                const enabled = Object.entries(apiFilters)
+                    .filter(([, enabled]) => enabled)
+                    .map(([key]) => filterLabels[key] || key);
+                filterSummary.textContent = enabled.length ? enabled.join(', ') : 'None';
+            }
+        }
+
+        function applyFilters() {
+            if (!Array.isArray(allEndpoints)) {
+                visibleEndpoints = [];
+            } else {
+                visibleEndpoints = allEndpoints.filter(ep => apiFilters[ep.category || categorizeEndpoint(ep)] ?? false);
+            }
+            renderEndpoints(visibleEndpoints);
+            latestTestResults.forEach(applyResultToList);
+            updateMetrics();
+            updateFilterSummary();
+        }
 
         function renderEndpoints(endpoints) {
             if (!endpointsList) return;
@@ -1264,15 +1415,19 @@
                 return;
             }
             const itemHTML = (ep) => {
+                const category = ep.category || categorizeEndpoint(ep);
                 const methods = (ep.methods || []).map(m => `<span class="endpoint-method method-${m.toLowerCase()}">${m}</span>`).join(' ');
                 const desc = ep.description ? `<small class="text-muted ms-2">${escapeHtml(ep.description)}</small>` : '';
-                const rule = escapeHtml(ep.rule || ep.url || '');
+                const ruleRaw = ep.rule || ep.url || '';
+                const rule = escapeHtml(ruleRaw);
                 const mlist = ep.methods || ['GET'];
                 const displayMethod = mlist.includes('GET') ? 'GET' : mlist[0];
-                const idBase = `ep-${slugify(ep.rule || ep.url || '')}`;
-                const protectedBadge = ep.protected ? '<span class="badge bg-secondary me-2">Protected</span>' : '';
+                const idBase = `ep-${slugify(ruleRaw)}`;
+                const badge = category === 'system'
+                    ? '<span class="category-badge system">System</span>'
+                    : (category === 'excluded' ? '<span class="category-badge excluded">Excluded</span>' : '');
                 const testButtons = ep.protected
-                    ? ''
+                    ? '<span style="font-size:12px; color: var(--console-text-muted);">Tests disabled</span>'
                     : `<button class="btn btn-sm btn-outline-secondary" onclick="copyHttpToTerminal('${displayMethod}', '${rule}')">Copy</button>
                        <button class="btn btn-sm btn-outline-primary" onclick="uiTestEndpoint('${displayMethod}', '${rule}')">Test</button>`;
                 return `
@@ -1284,13 +1439,93 @@
                             ${desc}
                         </div>
                         <div>
-                            ${protectedBadge}<span id="${idBase}-status" class="badge bg-warning text-dark me-2">Not tested</span>
+                            ${badge}<span id="${idBase}-status" class="badge bg-warning text-dark me-2">Not tested</span>
                             ${testButtons}
                         </div>
                     </div>
                 </div>`
             };
             endpointsList.innerHTML = endpoints.map(itemHTML).join('');
+        }
+
+        function updateMetrics() {
+            if (apiTotalEl) apiTotalEl.textContent = visibleEndpoints.length;
+            if (!apiOkEl || !apiFailEl || !apiAvgEl) return;
+            if (!latestTestResults.length) {
+                apiOkEl.textContent = '0';
+                apiFailEl.textContent = '0';
+                apiAvgEl.textContent = '--';
+                return;
+            }
+            const visibleRules = new Set(visibleEndpoints.map(ep => ep.rule || ep.url));
+            let success = 0;
+            let fail = 0;
+            let totalTime = 0;
+            let counted = 0;
+            latestTestResults.forEach(result => {
+                const endpointRule = result.endpoint || result.url || '';
+                if (!visibleRules.has(endpointRule)) return;
+                counted += 1;
+                if (result.status === 'success') success += 1;
+                else fail += 1;
+                totalTime += Number(result.response_time_ms || 0);
+            });
+            apiOkEl.textContent = String(success);
+            apiFailEl.textContent = String(fail);
+            apiAvgEl.textContent = counted ? `${Math.round(totalTime / counted)}ms` : '--';
+        }
+
+        async function loadEndpoints(options = {}) {
+            if (isLoadingEndpoints || !endpointsList) return;
+            const includeSystem = apiFilters.system;
+            isLoadingEndpoints = true;
+            try {
+                const r = await fetch(`${API_BASE}/api/scanner/discover?include_con5013=${includeSystem ? 'true' : 'false'}`);
+                const d = await r.json();
+                if (d.status === 'success') {
+                    const eps = (d.endpoints || []).map(ep => ({ ...ep, category: categorizeEndpoint(ep) }));
+                    allEndpoints = eps;
+                    latestTestResults = [];
+                    latestSummary = null;
+                    applyFilters();
+                    if (options.autoTest !== false) {
+                        await testAllEndpointsUI();
+                    } else {
+                        updateMetrics();
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to discover endpoints', e);
+            } finally {
+                isLoadingEndpoints = false;
+            }
+        }
+
+        async function testAllEndpointsUI() {
+            if (isTestingAll) return;
+            isTestingAll = true;
+            try {
+                if (!allEndpoints.length) {
+                    latestTestResults = [];
+                    latestSummary = null;
+                    return;
+                }
+                const includeSystem = apiFilters.system;
+                const r = await fetch(`${API_BASE}/api/scanner/test-all?include_con5013=${includeSystem ? 'true' : 'false'}`, { method:'POST' });
+                const d = await r.json();
+                if (d.status === 'success') {
+                    const summary = d.results || d;
+                    const list = Array.isArray(summary.results) ? summary.results : (Array.isArray(summary) ? summary : []);
+                    latestSummary = summary;
+                    latestTestResults = Array.isArray(list) ? list.slice() : [];
+                    latestTestResults.forEach(applyResultToList);
+                }
+            } catch (e) {
+                console.error('Failed to test all', e);
+            } finally {
+                updateMetrics();
+                isTestingAll = false;
+            }
         }
 
         async function uiTestEndpoint(method, path) {
@@ -1304,9 +1539,8 @@
                 if (d.status === 'success' || res.status) {
                     const msg = `HTTP ${method} ${path}\nStatus: ${res.status_code} (${res.status})\nTime: ${res.response_time_ms} ms`;
                     appendTermLine(`<div style=\"color:#9f9; white-space:pre-wrap;\">${escapeHtml(msg)}</div>`);
-                    // Update the badge on this row
                     applyResultToList({ ...res, method, endpoint: path });
-                    // Refresh aggregate metrics to stay accurate
+                    latestSummary = null;
                     await testAllEndpointsUI();
                 } else {
                     appendTermLine(`<span style='color:#ff6b6b;'>Test failed: ${escapeHtml(d.message||'Unknown')}</span>`);
@@ -1328,24 +1562,20 @@
             const candidates = [];
             const addCandidate = (s) => { if (s) candidates.push(`ep-${slugify(s)}`); };
             addCandidate(endpoint);
-            // Try trimming or adding trailing slash for matching
             if (endpoint.endsWith('/')) addCandidate(endpoint.slice(0, -1));
             else addCandidate(endpoint + '/');
-            // Also try URL if provided
             if (result.url && result.url !== endpoint) {
                 addCandidate(result.url);
             }
-            let el = null, pathEl = null, id = null;
+            let el = null, pathEl = null;
             for (const cid of candidates) {
                 const statusEl = document.getElementById(`${cid}-status`);
-                if (statusEl) { el = statusEl; id = cid; pathEl = document.getElementById(`${cid}-path`); break; }
+                if (statusEl) { el = statusEl; pathEl = document.getElementById(`${cid}-path`); break; }
             }
             if (!el) return;
             el.textContent = `${result.status_code || ''} ${result.status || ''}`.trim();
             el.className = 'badge me-2 ' + ((result.status === 'success') ? 'bg-success' : (result.status==='timeout' || result.status==='connection_error') ? 'bg-warning text-dark' : 'bg-danger');
             el.title = `Time: ${Math.round(result.response_time_ms||0)} ms`;
-            // Also color the endpoint path text to reflect status
-            // pathEl was resolved alongside el
             if (pathEl) {
                 let cls = 'text-danger';
                 if (result.status === 'success') cls = 'text-success';
@@ -1354,31 +1584,76 @@
             }
         }
 
-        async function testAllEndpointsUI() {
-            try {
-                const includeCon = document.getElementById('api-include-con5013')?.checked;
-                const r = await fetch(`${API_BASE}/api/scanner/test-all?include_con5013=${includeCon ? 'true' : 'false'}`, { method:'POST' });
-                const d = await r.json();
-                if (d.status === 'success') {
-                    const summary = d.results || d; // blueprint nests under 'results'
-                    const ok = summary.successful_tests || 0;
-                    const fail = summary.failed_tests || 0;
-                    const avg = Math.round(summary.average_response_time || 0);
-                    apiOkEl && (apiOkEl.textContent = ok);
-                    apiFailEl && (apiFailEl.textContent = fail);
-                    apiAvgEl && (apiAvgEl.textContent = `${avg}ms`);
-                    (summary.results || []).forEach(applyResultToList);
-                }
-            } catch (e) { console.error('Failed to test all', e); }
+        function toggleFilter(name) {
+            if (!(name in apiFilters)) return;
+            apiFilters[name] = !apiFilters[name];
+            if (name === 'system') {
+                loadEndpoints({ autoTest: true });
+            } else {
+                applyFilters();
+            }
         }
 
-        apiScanBtn && apiScanBtn.addEventListener('click', loadEndpoints);
-        document.getElementById('api-include-con5013')?.addEventListener('change', loadEndpoints);
-        apiTestAllBtn && apiTestAllBtn.addEventListener('click', testAllEndpointsUI);
+        function discoverEndpoints() { loadEndpoints({ autoTest: true }); }
+        function testAllEndpoints() { testAllEndpointsUI(); }
+        function exportApiData() {
+            try {
+                const payload = {
+                    generated_at: new Date().toISOString(),
+                    filters: { ...apiFilters },
+                    endpoints: allEndpoints,
+                    visible_endpoints: visibleEndpoints,
+                    test_results: latestTestResults,
+                    summary: latestSummary
+                };
+                const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `con5013-api-${Date.now()}.json`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+            } catch (e) {
+                console.error('Failed to export API data', e);
+            }
+        }
+        window.discoverEndpoints = discoverEndpoints;
+        window.scanEndpoints = discoverEndpoints;
+        window.testAllEndpoints = testAllEndpoints;
+        window.exportApiData = exportApiData;
+
+        if (filterToggle && filterDropdown) {
+            filterToggle.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                filterDropdown.classList.toggle('open');
+            });
+        }
+        if (filterMenu && filterDropdown) {
+            filterMenu.addEventListener('click', (event) => {
+                const item = event.target.closest('.dropdown-item');
+                if (!item) return;
+                event.preventDefault();
+                event.stopPropagation();
+                const key = item.getAttribute('data-filter');
+                toggleFilter(key);
+            });
+        }
+        document.addEventListener('click', (event) => {
+            if (filterDropdown && !filterDropdown.contains(event.target)) {
+                filterDropdown.classList.remove('open');
+            }
+        });
+
+        updateFilterSummary();
+        updateMetrics();
+
         // Load endpoints when switching to API tab
         document.querySelectorAll('.nav-item').forEach(btn => {
             btn.addEventListener('click', () => {
-                if (btn.getAttribute('data-panel') === 'api') { loadEndpoints(); }
+                if (btn.getAttribute('data-panel') === 'api') { discoverEndpoints(); }
             });
         });
     </script>
