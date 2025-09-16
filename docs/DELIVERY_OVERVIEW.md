@@ -41,7 +41,7 @@ CON5013/
 │   ├── crawl4ai_integration.py       # Crawl4AI monitoring sample
 │   ├── matrix_app.py                 # Matrix-themed showcase used in screenshots/tests
 │   ├── simple_integration.py         # Minimal integration (construct + route)
-│   └── test_app.py                   # Lightweight smoke-test application
+│   └── example_app.py                # Lightweight smoke-test application
 ├── tests/
 │   ├── test_con5013.py               # Core behaviour + blueprint/API checks
 │   ├── test_con5013_app.py           # App factory/integration coverage
@@ -177,7 +177,7 @@ Each option can also be provided via `app.config[...]`.
 - `advanced_implementation.py` – fully customised console (alternative prefix, custom log sources, etc.).
 - `matrix_app.py` – cinematic themed app referenced throughout the README.
 - `crawl4ai_integration.py` – demonstrates enabling Crawl4AI-specific logging and monitoring.
-- `test_app.py` – lightweight target for manual smoke testing.
+- `example_app.py` – lightweight target for manual smoke testing.
 
 Execute any example with `python examples/<filename>.py` once dependencies are installed.
 
