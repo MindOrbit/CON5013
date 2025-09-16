@@ -438,6 +438,13 @@ def api_info():
             'terminal': con5013.config['CON5013_ENABLE_TERMINAL'],
             'api_scanner': con5013.config['CON5013_ENABLE_API_SCANNER'],
             'system_monitor': con5013.config['CON5013_ENABLE_SYSTEM_MONITOR'],
+            'system_monitor_metrics': {
+                'cpu': con5013.config.get('CON5013_MONITOR_CPU', True),
+                'memory': con5013.config.get('CON5013_MONITOR_MEMORY', True),
+                'disk': con5013.config.get('CON5013_MONITOR_DISK', True),
+                'network': con5013.config.get('CON5013_MONITOR_NETWORK', True),
+                'gpu': con5013.config.get('CON5013_MONITOR_GPU', True),
+            },
             'crawl4ai_integration': con5013.config['CON5013_CRAWL4AI_INTEGRATION'],
         },
         'endpoints': {

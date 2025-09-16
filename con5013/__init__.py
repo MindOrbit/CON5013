@@ -105,6 +105,7 @@ class Con5013:
             'CON5013_MONITOR_MEMORY': True,
             'CON5013_MONITOR_DISK': True,
             'CON5013_MONITOR_NETWORK': True,
+            'CON5013_MONITOR_GPU': True,
             
             # UI configuration
             'CON5013_ASCII_ART': True,
