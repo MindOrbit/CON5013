@@ -137,6 +137,17 @@ def log_runtime_metric(metric: str, value: Any, tags: Iterable[str] | None = Non
     logger.info("metric=%s value=%s tags=%s", metric, value, tag_str)
 
 
+def get_cache_usage() -> Dict[str, int]:
+    """Simulate cache usage metrics for the custom system box example."""
+
+    # In production you would call Redis/Memcached or scrape Prometheus here.
+    hits = 128_450
+    misses = 21_550
+    total = hits + misses
+    percent = int((hits / total) * 100) if total else 0
+    return {"hits": hits, "misses": misses, "percent": percent}
+
+
 def register_console_commands(console: Con5013, app: Flask) -> None:
     feature_flags = app.config.setdefault("FEATURE_FLAGS", {
         "RATE_LIMITING": True,
@@ -194,6 +205,78 @@ def register_console_commands(console: Con5013, app: Flask) -> None:
     console.add_custom_command("feature", toggle_feature_command, "Toggle runtime feature flags")
     console.add_custom_command("job", job_runner_command, "Simulate a job dispatch and log it")
     console.add_custom_command("snapshot", metrics_snapshot_command, "Capture system and runtime metrics")
+
+
+def register_custom_system_boxes(console: Con5013, app: Flask) -> None:
+    """Showcase advanced custom boxes rendered inside the System tab."""
+
+    feature_flags = app.config.setdefault("FEATURE_FLAGS", {})
+    job_metrics = app.config.setdefault("JOB_QUEUE_METRICS", {"active": 6, "capacity": 24})
+
+    console.add_system_box(
+        "runtime-insights",
+        title="Runtime Insights",
+        description=(
+            "Static rows evaluated on every refresh. Replace the callables with your own "
+            "functions to surface live metrics."
+        ),
+        order=5,
+        rows=[
+            {"name": "Environment", "value": lambda: app.config.get("ENV", "production")},
+            {
+                "name": "Enabled Flags",
+                "value": lambda ff=feature_flags: ", ".join(
+                    sorted(name for name, enabled in ff.items() if enabled)
+                )
+                or "None",
+            },
+            {
+                "name": "Job Queue Load",
+                "value": lambda jm=job_metrics: f"{jm['active']} of {jm['capacity']} slots used",
+                "progress": {
+                    "value": lambda jm=job_metrics: round(
+                        (jm["active"] / max(jm["capacity"], 1)) * 100, 2
+                    ),
+                    "min": 0,
+                    "max": 100,
+                    "color_rules": [
+                        {"threshold": 90, "class": "error"},
+                        {"threshold": 70, "class": "warning"},
+                    ],
+                },
+            },
+        ],
+    )
+
+    def cache_metrics_box() -> Dict[str, Any]:
+        usage = get_cache_usage()
+        return {
+            "title": "Cache",
+            "description": "Dynamic provider example that can call out to services.",
+            "order": 15,
+            "rows": [
+                {"name": "Hits", "value": f"{usage['hits']:,}"},
+                {"name": "Misses", "value": f"{usage['misses']:,}"},
+                {
+                    "name": "Hit Rate",
+                    "value": f"{usage['percent']}%",
+                    "progress": {
+                        "value": usage["percent"],
+                        "min": 0,
+                        "max": 100,
+                        "color_rules": [
+                            {"threshold": 90, "class": "error"},
+                            {"threshold": 75, "class": "warning"},
+                        ],
+                    },
+                },
+            ],
+        }
+
+    cache_box_id = console.add_system_box("cache-metrics", provider=cache_metrics_box)
+
+    if not app.config.get("CACHE_MONITOR_ENABLED", True):
+        console.set_system_box_enabled(cache_box_id, False)
 
 
 def register_routes(app: Flask, console: Con5013) -> None:
@@ -261,6 +344,7 @@ def create_app() -> Flask:
 
     console = Con5013(app, config=CON5013_CONFIG)
     register_console_commands(console, app)
+    register_custom_system_boxes(console, app)
     register_routes(app, console)
     register_additional_log_sources(console)
 

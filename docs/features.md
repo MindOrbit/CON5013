@@ -14,6 +14,25 @@ Con5013 delivers a self-contained operations console for Flask applications. The
 - Optional GPU telemetry is gathered through NVIDIA NVML (`pynvml`) or an `nvidia-smi` fallback, enabling visibility into accelerator utilization when hardware is present.
 - Provides paginated process listings and aggregate health checks through `/api/system/stats`, `/api/system/health`, and `/api/system/processes` so operators can inspect load spikes or runaway workers without leaving the browser.
 
+### Custom System Boxes
+- Extend the System tab with domain-specific metrics using `console.add_system_box` or the `CON5013_SYSTEM_CUSTOM_BOXES` configuration hook. Static rows accept plain dictionaries, while callables and provider functions let you compute values on every refresh so the UI always reflects the latest state.
+
+```python
+console.add_system_box(
+    "cache-metrics",
+    title="Cache",
+    rows=[
+        {"name": "Hits", "value": "128,450"},
+        {
+            "name": "Hit Rate",
+            "value": "86%",
+            "progress": {"value": 86, "color_rules": [{"threshold": 70, "class": "warning"}]},
+        },
+    ],
+)
+```
+- Boxes can be toggled or removed at runtime, reordered with the `order` parameter, and enriched with descriptions or `progress` metadata for inline gauges. The example applications demonstrate both static Matrix-themed cards and advanced provider-driven panels.
+
 ## Developer Tooling
 
 ### API Discovery & Testing
