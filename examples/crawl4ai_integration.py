@@ -9,7 +9,7 @@ from collections import deque
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from flask import Flask, jsonify, render_template_string, request
+from flask import Flask, jsonify, render_template_string, request, url_for
 
 from con5013 import Con5013
 
@@ -517,6 +517,13 @@ def home():
 
     crawl4ai_simulator.ensure_bootstrap_jobs()
 
+    console_base_url = console.config.get("CON5013_URL_PREFIX", "/con5013") or "/con5013"
+    if not console_base_url.startswith("/"):
+        console_base_url = f"/{console_base_url}"
+    if console_base_url != "/" and console_base_url.endswith("/"):
+        console_base_url = console_base_url.rstrip("/")
+    console_script_src = url_for("con5013.static", filename="js/con5013.js")
+
     return render_template_string(
         """
     <!DOCTYPE html>
@@ -722,13 +729,22 @@ def home():
             </div>
 
             <div class="console-hint">
-                <p><strong>Press {{ con5013_config.get('hotkey', 'Alt+C') }}</strong> to launch the Con5013 overlay anywhere.</p>
+                <p><strong>Press {{ con5013_config.get('CON5013_HOTKEY', 'Alt+C') }}</strong> to launch the Con5013 overlay anywhere.</p>
                 <p>The Logs tab is pinned to <strong>Crawl4AI</strong> and filtered to <em>error</em> entries so that operational issues surface immediately.</p>
-                <p>Need the full console? Visit the <a href="/console" style="color:#38bdf8; text-decoration:underline;">dedicated Con5013 dashboard</a>.</p>
+                <p>Need the full console? Visit the <a href="{{ console_base_url }}" style="color:#38bdf8; text-decoration:underline;">dedicated Con5013 dashboard</a>.</p>
             </div>
         </div>
 
         {{ con5013_console_html() | safe }}
+
+        <script>
+            window.CON5013_BOOTSTRAP = {{ con5013_config | tojson }};
+        </script>
+        <script
+            src="{{ console_script_src }}"
+            data-con5013-base="{{ console_base_url }}"
+            data-con5013-hotkey="{{ con5013_config.get('CON5013_HOTKEY', 'Alt+C') }}"
+        ></script>
 
         <script>
             async function refreshMetrics() {
@@ -824,6 +840,8 @@ def home():
         """,
         crawl4ai_available=CRAWL4AI_AVAILABLE,
         con5013_config=console.config,
+        console_script_src=console_script_src,
+        console_base_url=console_base_url,
     )
 
 
