@@ -9,7 +9,7 @@ from collections import deque
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from flask import Flask, jsonify, render_template_string, request, url_for
+from flask import Flask, jsonify, render_template_string, request
 
 from con5013 import Con5013
 
@@ -34,7 +34,7 @@ app.config["SECRET_KEY"] = "your-secret-key-here"
 console = Con5013(
     app,
     config={
-        "CON5013_URL_PREFIX": "/console",
+        "CON5013_URL_PREFIX": "/crawl",
         "CON5013_THEME": "dark",
         "CON5013_ENABLE_LOGS": True,
         "CON5013_ENABLE_TERMINAL": True,
@@ -522,8 +522,6 @@ def home():
         console_base_url = f"/{console_base_url}"
     if console_base_url != "/" and console_base_url.endswith("/"):
         console_base_url = console_base_url.rstrip("/")
-    console_script_src = url_for("con5013.static", filename="js/con5013.js")
-
     return render_template_string(
         """
     <!DOCTYPE html>
@@ -740,11 +738,6 @@ def home():
         <script>
             window.CON5013_BOOTSTRAP = {{ con5013_config | tojson }};
         </script>
-        <script
-            src="{{ console_script_src }}"
-            data-con5013-base="{{ console_base_url }}"
-            data-con5013-hotkey="{{ con5013_config.get('CON5013_HOTKEY', 'Alt+C') }}"
-        ></script>
 
         <script>
             async function refreshMetrics() {
@@ -840,7 +833,6 @@ def home():
         """,
         crawl4ai_available=CRAWL4AI_AVAILABLE,
         con5013_config=console.config,
-        console_script_src=console_script_src,
         console_base_url=console_base_url,
     )
 
@@ -974,7 +966,7 @@ def test_crawl4ai():
 
 if __name__ == "__main__":
     print("🚀 Starting Crawl4AI + Con5013 Deep Integration Demo")
-    print("📊 Console available at: http://localhost:5000/console")
+    print("📊 Console available at: http://localhost:5000/crawl")
     print("✨ Press Alt+C for the overlay console (filtered to Crawl4AI errors)")
     print("🔍 Use /api/scrape/start?fail=1 to trigger failure logs")
     app.run(host="0.0.0.0", port=5000, debug=True)
