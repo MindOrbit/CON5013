@@ -19,6 +19,8 @@ class SystemMonitor:
         self.app = app
         self.config = config
         self.update_interval = config.get('CON5013_SYSTEM_UPDATE_INTERVAL', 5)
+        self.monitor_system_info = config.get('CON5013_MONITOR_SYSTEM_INFO', True)
+        self.monitor_application = config.get('CON5013_MONITOR_APPLICATION', True)
         self.monitor_cpu = config.get('CON5013_MONITOR_CPU', True)
         self.monitor_memory = config.get('CON5013_MONITOR_MEMORY', True)
         self.monitor_disk = config.get('CON5013_MONITOR_DISK', True)
@@ -51,12 +53,16 @@ class SystemMonitor:
     
     def get_current_stats(self) -> Dict[str, Any]:
         """Get current system statistics."""
-        stats = {
+        stats: Dict[str, Any] = {
             'timestamp': time.time(),
-            'system': self._get_system_info(),
-            'application': self._get_application_stats(),
             'psutil_available': self.psutil_available
         }
+
+        if self.monitor_system_info:
+            stats['system'] = self._get_system_info()
+
+        if self.monitor_application:
+            stats['application'] = self._get_application_stats()
         
         if self.psutil_available:
             if self.monitor_cpu:

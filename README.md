@@ -404,7 +404,10 @@ console = Con5013(app, config={
 ### Custom System Boxes
 
 Con5013's system monitor can be extended with additional cards so teams can surface
-application-specific metrics alongside built-in CPU, memory, and disk panels.
+application-specific metrics alongside built-in CPU, memory, and disk panels. Core cards
+can also be toggled individually using configuration flags such as
+`CON5013_MONITOR_SYSTEM_INFO`, `CON5013_MONITOR_APPLICATION`, or `CON5013_MONITOR_GPU`
+when you need to slim down the System tab.
 
 ```python
 from con5013 import Con5013
