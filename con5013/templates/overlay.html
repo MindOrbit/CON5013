@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Con5013 Overlay</title>
+    <style>
+        /* Overlay-specific styles */
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            background: transparent;
+            overflow: hidden;
+        }
+        
+        .con5013-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 999999;
+            display: none;
+            backdrop-filter: blur(5px);
+        }
+        
+        .con5013-overlay.active {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .overlay-header {
+            background: #1a1a1a;
+            color: #00ff00;
+            padding: 10px 20px;
+            border-bottom: 1px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .overlay-title {
+            font-size: 18px;
+            font-weight: bold;
+        }
+        
+        .overlay-close {
+            background: #ff4444;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        
+        .overlay-close:hover {
+            background: #ff6666;
+        }
+        
+        .overlay-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .overlay-tabs {
+            background: #2a2a2a;
+            display: flex;
+            border-bottom: 1px solid #333;
+        }
+        
+        .overlay-tab {
+            background: #2a2a2a;
+            color: #ccc;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            border-right: 1px solid #333;
+            font-family: inherit;
+        }
+        
+        .overlay-tab.active {
+            background: #1a1a1a;
+            color: #00ff00;
+        }
+        
+        .overlay-tab:hover {
+            background: #333;
+        }
+        
+        .overlay-panel {
+            flex: 1;
+            background: #1a1a1a;
+            color: #ccc;
+            padding: 20px;
+            overflow-y: auto;
+            display: none;
+        }
+        
+        .overlay-panel.active {
+            display: block;
+        }
+        
+        /* Mini console styles */
+        .mini-console {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 60px;
+            height: 60px;
+            background: #1a1a1a;
+            border: 2px solid #00ff00;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 999998;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 20px rgba(0, 255, 0, 0.3);
+        }
+        
+        .mini-console:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 30px rgba(0, 255, 0, 0.5);
+        }
+        
+        .mini-console-icon {
+            color: #00ff00;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        
+        /* Status indicator */
+        .status-indicator {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #00ff00;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        /* Terminal styles */
+        .terminal-output {
+            background: #000;
+            color: #00ff00;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+            height: 300px;
+            overflow-y: auto;
+            margin-bottom: 10px;
+            border: 1px solid #333;
+        }
+        
+        .terminal-input {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .terminal-input input {
+            flex: 1;
+            background: #1a1a1a;
+            color: #00ff00;
+            border: 1px solid #333;
+            padding: 8px 12px;
+            border-radius: 3px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+        }
+        
+        .terminal-input button {
+            background: #00ff00;
+            color: #000;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: bold;
+        }
+        
+        .terminal-input button:hover {
+            background: #00cc00;
+        }
+        
+        /* Log styles */
+        .log-container {
+            height: 400px;
+            overflow-y: auto;
+            background: #000;
+            border: 1px solid #333;
+            border-radius: 5px;
+            padding: 15px;
+        }
+        
+        .log-entry {
+            margin-bottom: 8px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 13px;
+        }
+        
+        .log-entry.info { color: #00ff00; }
+        .log-entry.warning { color: #ffaa00; }
+        .log-entry.error { color: #ff4444; }
+        .log-entry.debug { color: #888; }
+        
+        /* API Scanner styles */
+        .api-list {
+            max-height: 400px;
+            overflow-y: auto;
+            background: #000;
+            border: 1px solid #333;
+            border-radius: 5px;
+            padding: 15px;
+        }
+        
+        .api-endpoint {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 3px;
+            padding: 10px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .api-endpoint:hover {
+            background: #2a2a2a;
+        }
+        
+        .api-method {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        
+        .api-method.GET { background: #00aa00; color: white; }
+        .api-method.POST { background: #0066aa; color: white; }
+        .api-method.PUT { background: #aa6600; color: white; }
+        .api-method.DELETE { background: #aa0000; color: white; }
+        
+        /* System Monitor styles */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-card {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 5px;
+            padding: 15px;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #00ff00;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #888;
+            text-transform: uppercase;
+        }
+    </style>
+</head>
+<body>
+    <!-- Mini Console Button -->
+    <div class="mini-console" id="miniConsole">
+        <div class="mini-console-icon">⚡</div>
+        <div class="status-indicator"></div>
+    </div>
+
+    <!-- Overlay Console -->
+    <div class="con5013-overlay" id="overlayConsole">
+        <div class="overlay-header">
+            <div class="overlay-title">Con5013 Console</div>
+            <button class="overlay-close" id="overlayClose">✕</button>
+        </div>
+        
+        <div class="overlay-content">
+            <div class="overlay-tabs">
+                <button class="overlay-tab active" data-panel="logs">Logs</button>
+                <button class="overlay-tab" data-panel="terminal">Terminal</button>
+                <button class="overlay-tab" data-panel="api">API Scanner</button>
+                <button class="overlay-tab" data-panel="system">System</button>
+            </div>
+            
+            <!-- Logs Panel -->
+            <div class="overlay-panel active" id="logs-panel">
+                <h3>Application Logs</h3>
+                <div style="margin: 10px 0; display:flex; gap:10px; align-items:center;">
+                    <label for="logSourceSel">Source:</label>
+                    <select id="logSourceSel" style="background:#1a1a1a; color:#ccc; border:1px solid #333; padding:6px 8px;">
+                        <option value="flask">flask</option>
+                    </select>
+                    <button id="logsRefreshBtn" style="background:#00ff00; color:#000; border:none; padding:6px 10px; border-radius:3px; cursor:pointer;">Refresh</button>
+                </div>
+                <div class="log-container" id="logContainer">
+                    <div class="log-entry info">[INFO] Con5013 overlay initialized</div>
+                    <div class="log-entry info">[INFO] Waiting for log data...</div>
+                </div>
+            </div>
+            
+            <!-- Terminal Panel -->
+            <div class="overlay-panel" id="terminal-panel">
+                <h3>Interactive Terminal</h3>
+                <div class="terminal-output" id="terminalOutput">
+                    <div style="color: #00ff00;">Con5013 Terminal v1.0.0</div>
+                    <div style="color: #888;">Type 'help' for available commands</div>
+                    <div style="color: #00ff00;">$ </div>
+                </div>
+                <div class="terminal-input">
+                    <input type="text" id="terminalInput" placeholder="Enter command..." />
+                    <button id="terminalExecute">Execute</button>
+                </div>
+            </div>
+            
+            <!-- API Scanner Panel -->
+            <div class="overlay-panel" id="api-panel">
+                <h3>API Endpoints</h3>
+                <div class="api-list" id="apiList">
+                    <div class="api-endpoint">
+                        <span class="api-method GET">GET</span>
+                        <span>/api/logs</span>
+                    </div>
+                    <div class="api-endpoint">
+                        <span class="api-method POST">POST</span>
+                        <span>/api/terminal/execute</span>
+                    </div>
+                    <div class="api-endpoint">
+                        <span class="api-method GET">GET</span>
+                        <span>/api/system/stats</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- System Monitor Panel -->
+            <div class="overlay-panel" id="system-panel">
+                <h3>System Statistics</h3>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="cpuUsage">--</div>
+                        <div class="stat-label">CPU Usage</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="memoryUsage">--</div>
+                        <div class="stat-label">Memory Usage</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="uptime">--</div>
+                        <div class="stat-label">Uptime</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="requests">--</div>
+                        <div class="stat-label">Total Requests</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Con5013 Overlay JavaScript
+        class Con5013Overlay {
+            constructor() {
+                this.isOpen = false;
+                this.currentPanel = 'logs';
+                this.config = {{ config | tojson }};
+                this.currentSource = 'flask';
+                this.init();
+            }
+            
+            init() {
+                this.bindEvents();
+                this.loadLogSources();
+                this.startPolling();
+            }
+            
+            bindEvents() {
+                // Mini console toggle
+                document.getElementById('miniConsole').addEventListener('click', () => {
+                    this.toggle();
+                });
+                
+                // Overlay close
+                document.getElementById('overlayClose').addEventListener('click', () => {
+                    this.close();
+                });
+                
+                // Tab switching
+                document.querySelectorAll('.overlay-tab').forEach(tab => {
+                    tab.addEventListener('click', (e) => {
+                        this.switchPanel(e.target.dataset.panel);
+                    });
+                });
+                
+                // Terminal input
+                const terminalInput = document.getElementById('terminalInput');
+                const terminalExecute = document.getElementById('terminalExecute');
+                
+                terminalInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        this.executeCommand();
+                    }
+                });
+                
+                terminalExecute.addEventListener('click', () => {
+                    this.executeCommand();
+                });
+                
+                // Logs controls
+                document.getElementById('logSourceSel').addEventListener('change', (e) => {
+                    this.currentSource = e.target.value;
+                    this.refreshLogs();
+                });
+                document.getElementById('logsRefreshBtn').addEventListener('click', () => this.refreshLogs());
+
+                // Escape key to close
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape' && this.isOpen) {
+                        this.close();
+                    }
+                });
+            }
+
+            async loadLogSources() {
+                try {
+                    const res = await fetch(`${this.config.CON5013_URL_PREFIX}/api/logs/sources`);
+                    const data = await res.json();
+                    if (data.status === 'success' && Array.isArray(data.sources)) {
+                        const sel = document.getElementById('logSourceSel');
+                        sel.innerHTML = '';
+                        data.sources.forEach(src => {
+                            const opt = document.createElement('option');
+                            opt.value = src; opt.textContent = src;
+                            sel.appendChild(opt);
+                        });
+                        if (data.sources.includes('flask')) {
+                            this.currentSource = 'flask';
+                            sel.value = 'flask';
+                        } else if (data.sources.length) {
+                            this.currentSource = data.sources[0];
+                            sel.value = data.sources[0];
+                        }
+                        // Initial fetch after sources load
+                        this.refreshLogs();
+                    }
+                } catch (e) {
+                    console.error('Failed to load log sources', e);
+                }
+            }
+            
+            toggle() {
+                if (this.isOpen) {
+                    this.close();
+                } else {
+                    this.open();
+                }
+            }
+            
+            open() {
+                document.getElementById('overlayConsole').classList.add('active');
+                this.isOpen = true;
+                this.refreshCurrentPanel();
+            }
+            
+            close() {
+                document.getElementById('overlayConsole').classList.remove('active');
+                this.isOpen = false;
+            }
+            
+            switchPanel(panelName) {
+                // Update tabs
+                document.querySelectorAll('.overlay-tab').forEach(tab => {
+                    tab.classList.remove('active');
+                });
+                document.querySelector(`[data-panel="${panelName}"]`).classList.add('active');
+                
+                // Update panels
+                document.querySelectorAll('.overlay-panel').forEach(panel => {
+                    panel.classList.remove('active');
+                });
+                document.getElementById(`${panelName}-panel`).classList.add('active');
+                
+                this.currentPanel = panelName;
+                this.refreshCurrentPanel();
+            }
+            
+            refreshCurrentPanel() {
+                switch (this.currentPanel) {
+                    case 'logs':
+                        this.refreshLogs();
+                        break;
+                    case 'terminal':
+                        // Terminal doesn't need refresh
+                        break;
+                    case 'api':
+                        this.refreshAPI();
+                        break;
+                    case 'system':
+                        this.refreshSystem();
+                        break;
+                }
+            }
+            
+            async refreshLogs() {
+                try {
+                    const response = await fetch(`${this.config.CON5013_URL_PREFIX}/api/logs?source=${encodeURIComponent(this.currentSource)}`);
+                    const data = await response.json();
+                    
+                    if (data.status === 'success') {
+                        const container = document.getElementById('logContainer');
+                        container.innerHTML = '';
+                        
+                        data.logs.forEach(log => {
+                            const entry = document.createElement('div');
+                            entry.className = `log-entry ${log.level || 'info'}`;
+                            const ts = log.timestamp ? new Date(log.timestamp * 1000).toLocaleTimeString() : '';
+                            entry.textContent = `${ts} [${(log.level||'INFO').toUpperCase()}] ${log.message}`;
+                            container.appendChild(entry);
+                        });
+                        
+                        container.scrollTop = container.scrollHeight;
+                    }
+                } catch (error) {
+                    console.error('Failed to refresh logs:', error);
+                }
+            }
+            
+            async refreshAPI() {
+                try {
+                    const response = await fetch(`${this.config.CON5013_URL_PREFIX}/api/scanner/discover`);
+                    const data = await response.json();
+                    
+                    if (data.status === 'success') {
+                        const container = document.getElementById('apiList');
+                        container.innerHTML = '';
+                        
+                        data.endpoints.forEach(endpoint => {
+                            const div = document.createElement('div');
+                            div.className = 'api-endpoint';
+                            div.innerHTML = `
+                                <span class="api-method ${endpoint.method}">${endpoint.method}</span>
+                                <span>${endpoint.path}</span>
+                            `;
+                            container.appendChild(div);
+                        });
+                    }
+                } catch (error) {
+                    console.error('Failed to refresh API endpoints:', error);
+                }
+            }
+            
+            async refreshSystem() {
+                try {
+                    const response = await fetch(`${this.config.CON5013_URL_PREFIX}/api/system/stats`);
+                    const data = await response.json();
+                    
+                    if (data.status === 'success') {
+                        const stats = data.stats;
+                        document.getElementById('cpuUsage').textContent = `${stats.cpu_percent || 0}%`;
+                        document.getElementById('memoryUsage').textContent = `${stats.memory_percent || 0}%`;
+                        document.getElementById('uptime').textContent = this.formatUptime(stats.uptime || 0);
+                        document.getElementById('requests').textContent = stats.request_count || 0;
+                    }
+                } catch (error) {
+                    console.error('Failed to refresh system stats:', error);
+                }
+            }
+            
+            async executeCommand() {
+                const input = document.getElementById('terminalInput');
+                const output = document.getElementById('terminalOutput');
+                const command = input.value.trim();
+                
+                if (!command) return;
+                
+                // Add command to output
+                const commandDiv = document.createElement('div');
+                commandDiv.innerHTML = `<span style="color: #00ff00;">$ ${command}</span>`;
+                output.appendChild(commandDiv);
+                
+                try {
+                    const response = await fetch(`${this.config.CON5013_URL_PREFIX}/api/terminal/execute`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ command })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    const resultDiv = document.createElement('div');
+                    if (data.status === 'success') {
+                        resultDiv.style.color = '#ccc';
+                        resultDiv.textContent = data.result.output || 'Command executed successfully';
+                    } else {
+                        resultDiv.style.color = '#ff4444';
+                        resultDiv.textContent = `Error: ${data.message}`;
+                    }
+                    output.appendChild(resultDiv);
+                    
+                } catch (error) {
+                    const errorDiv = document.createElement('div');
+                    errorDiv.style.color = '#ff4444';
+                    errorDiv.textContent = `Error: ${error.message}`;
+                    output.appendChild(errorDiv);
+                }
+                
+                input.value = '';
+                output.scrollTop = output.scrollHeight;
+            }
+            
+            formatUptime(seconds) {
+                const hours = Math.floor(seconds / 3600);
+                const minutes = Math.floor((seconds % 3600) / 60);
+                return `${hours}h ${minutes}m`;
+            }
+            
+            startPolling() {
+                // Refresh current panel every 5 seconds
+                setInterval(() => {
+                    if (this.isOpen) {
+                        this.refreshCurrentPanel();
+                    }
+                }, 5000);
+            }
+        }
+        
+        // Initialize overlay when DOM is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            window.con5013Overlay = new Con5013Overlay();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,1345 @@
+/**
+ * Con5013 Console Extension JavaScript
+ * Interactive console functionality for Flask applications
+ */
+
+class Con5013Console {
+    constructor(options = {}) {
+        this.options = {
+            baseUrl: options.baseUrl || '/con5013',
+            hotkey: options.hotkey || 'Alt+C',
+            updateInterval: options.updateInterval || 5000,
+            maxLogEntries: options.maxLogEntries || 1000,
+            // Floating button behavior (auto overlay trigger)
+            autoFloatingButton: options.autoFloatingButton !== undefined ? options.autoFloatingButton : true,
+            floatingButtonPosition: options.floatingButtonPosition || 'bottom-right',
+            hideFabWhenOpen: options.hideFabWhenOpen !== undefined ? options.hideFabWhenOpen : true,
+            hideFabIfCustomButton: options.hideFabIfCustomButton !== undefined ? options.hideFabIfCustomButton : true,
+            customButtonSelector: options.customButtonSelector || '[data-con5013-button]',
+            ...options
+        };
+        
+        this.isOpen = false;
+        this.currentTab = 'logs';
+        this.currentLogSource = 'flask';
+        this.currentLogLevel = '';
+        this.currentLogSort = 'desc';
+        this.terminalHistory = [];
+        this.terminalHistoryIndex = -1;
+        this.endpoints = [];
+        this.systemStats = {};
+        this.features = {
+            logs: true,
+            terminal: true,
+            api_scanner: true,
+            system_monitor: true,
+        };
+        this.connectivityOk = null; // null=unknown, true=ok, false=error
+        this.prevNetwork = null;
+        this.logAutoScrollPaused = false;
+        
+        this.init();
+    }
+    
+    init() {
+        this.ensureStylesInjected();
+        this.createConsoleHTML();
+        this.createFloatingButton();
+        this.bindEvents();
+        this.setupHotkey();
+        this.loadInitialData();
+        
+        // Start periodic updates
+        this.startPeriodicUpdates();
+    }
+    
+    ensureStylesInjected() {
+        try {
+            const href = `${this.options.baseUrl}/static/css/con5013.css`;
+            const already = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
+                .some(l => (l.href || '').includes('/con5013/static/css/con5013.css'));
+            if (!already) {
+                const link = document.createElement('link');
+                link.rel = 'stylesheet';
+                link.href = href;
+                link.id = 'con5013-styles';
+                document.head.appendChild(link);
+                link.addEventListener('load', () => {
+                    this.onStylesReady();
+                });
+            }
+            if (already) {
+                setTimeout(() => this.onStylesReady(), 0);
+            }
+        } catch (e) {
+            console.debug('Con5013: could not auto-inject styles', e);
+        }
+    }
+
+    onStylesReady() {
+        const overlay = document.getElementById('con5013-overlay');
+        if (overlay && overlay.style && overlay.style.display === 'none') {
+            overlay.style.display = '';
+        }
+        const fab = document.getElementById('con5013-fab');
+        if (fab && fab.style && fab.style.display === 'none') {
+            fab.style.display = '';
+            this.updateFabVisibility();
+        }
+        // Refresh connectivity paint once DOM is ready
+        this.paintConnectivity();
+    }
+
+    createConsoleHTML() {
+        const consoleHTML = `
+            <div id="con5013-overlay" class="con5013-overlay" style="display:none;">
+                <div class="con5013-console">
+                    <div class="con5013-header">
+                        <h3 class="con5013-title">
+                            <div class="con5013-logo" aria-hidden="true">
+                                <svg id="con5013-b-icon" width="48" height="24" viewBox="0 0 240 120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="CON5013 monogram icon">
+                                  <rect x="8" y="8" rx="16" ry="16" width="224" height="104" fill="#0d1520" stroke="#1f2a37" stroke-width="2" />
+                                  <path d="M56 60 l36 -24" stroke="#31d0aa" stroke-width="8" stroke-linecap="round" fill="none" />
+                                  <path d="M56 60 l36 24" stroke="#31d0aa" stroke-width="8" stroke-linecap="round" fill="none" />
+                                  <path d="M188 36 l-40 48" stroke="#7aa2f7" stroke-width="8" stroke-linecap="round" fill="none" />
+                                  <path d="M112 60 h16" stroke="#cbd5e1" stroke-width="8" stroke-linecap="round" />
+                                </svg>
+                            </div>
+                            CON5013
+                        </h3>
+                        <button class="con5013-close" onclick="con5013.close()">&times;</button>
+                    </div>
+                    
+                    <div class="con5013-tabs">
+                        <button class="con5013-tab active" data-tab="logs">Logs</button>
+                        <button class="con5013-tab" data-tab="terminal">Terminal</button>
+                        <button class="con5013-tab" data-tab="api">API</button>
+                        <button class="con5013-tab" data-tab="system">System</button>
+                    </div>
+                    
+                    <div class="con5013-content">
+                        <!-- Logs Tab -->
+                        <div id="con5013-logs-tab" class="con5013-tab-content active">
+                            <div class="con5013-ascii">
+  __|   _ \\   \\ |  __|    \\ _ | __ /
+ (     (   | .  | __ \\  (  |  |  _ \\
+\\___| \\___/ _|\\_| ___/ \\__/  _| ___/
+            </div>
+                            <div class="con5013-subtitle">Flask Application Console & Monitor</div>
+                            
+                            <div class="con5013-api-controls" style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+                                <label style="color: var(--con5013-text-muted); font-size:12px;">Source</label>
+                                <select id="con5013-log-source" class="con5013-select"></select>
+                                <label style="color: var(--con5013-text-muted); font-size:12px;">Level</label>
+                                <select id="con5013-log-level" class="con5013-select">
+                                    <option value="">All</option>
+                                    <option value="DEBUG">DEBUG</option>
+                                    <option value="INFO">INFO</option>
+                                    <option value="WARNING">WARNING</option>
+                                    <option value="ERROR">ERROR</option>
+                                    <option value="CRITICAL">CRITICAL</option>
+                                </select>
+                                <label style="color: var(--con5013-text-muted); font-size:12px;">Sort</label>
+                                <select id="con5013-log-sort" class="con5013-select">
+                                    <option value="desc">Newest first</option>
+                                    <option value="asc">Oldest first</option>
+                                </select>
+                                <button class="con5013-btn" onclick="con5013.refreshLogs()">Refresh</button>
+                                <button class="con5013-btn secondary" onclick="con5013.clearLogs()">Clear</button>
+                                <button class="con5013-btn secondary" onclick="con5013.exportLogs()">Export</button>
+                            </div>
+                            
+                            <div class="con5013-logs-wrapper">
+                                <div id="con5013-logs" class="con5013-logs">
+                                    <div class="con5013-log-entry">
+                                        <span class="con5013-log-timestamp">16:53:00</span>
+                                        <span class="con5013-log-level INFO">INFO</span>
+                                        <span class="con5013-log-message">Con5013 console initialized successfully</span>
+                                    </div>
+                                    <div class="con5013-log-entry">
+                                        <span class="con5013-log-timestamp">16:53:01</span>
+                                        <span class="con5013-log-level SUCCESS">SUCCESS</span>
+                                        <span class="con5013-log-message">Flask application ready</span>
+                                    </div>
+                                    <div class="con5013-log-entry">
+                                        <span class="con5013-log-timestamp">16:53:02</span>
+                                        <span class="con5013-log-level INFO">INFO</span>
+                                        <span class="con5013-log-message">Database connection established</span>
+                                    </div>
+                                </div>
+                                <div id="con5013-logs-autoscroll-indicator" class="con5013-autoscroll-indicator" style="display:none;">
+                                    <span>Auto-scroll paused</span>
+                                    <button type="button" id="con5013-logs-resume" class="con5013-autoscroll-resume">Resume</button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Terminal Tab -->
+                        <div id="con5013-terminal-tab" class="con5013-tab-content">
+                            <div class="con5013-ascii">
+  __|   _ \\   \\ |  __|    \\ _ | __ /
+ (     (   | .  | __ \\  (  |  |  _ \\
+\\___| \\___/ _|\\_| ___/ \\__/  _| ___/
+            </div>
+                            <div class="con5013-subtitle">Interactive Terminal Interface</div>
+                            
+                            <div class="con5013-terminal">
+                                <div id="con5013-terminal-output" class="con5013-terminal-output">
+                                    <div>Con5013 Terminal v1.0.0</div>
+                                    <div>Type 'help' for available commands</div>
+                                    <div></div>
+                                </div>
+                                <div class="con5013-terminal-input">
+                                    <span class="con5013-terminal-prompt">con5013@flask:~$</span>
+                                    <textarea id="con5013-terminal-command" class="con5013-terminal-command" 
+                                              placeholder="Enter command..." rows="1"></textarea>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- API Tab -->
+                        <div id="con5013-api-tab" class="con5013-tab-content">
+                            <div class="con5013-ascii">
+  __|   _ \\   \\ |  __|    \\ _ | __ /
+ (     (   | .  | __ \\  (  |  |  _ \\
+\\___| \\___/ _|\\_| ___/ \\__/  _| ___/
+            </div>
+                            <div class="con5013-subtitle">API Endpoint Discovery & Testing</div>
+                            
+                            <div class="con5013-api">
+                                <div class="con5013-api-controls">
+                                    <button class="con5013-btn" onclick="con5013.discoverEndpoints()">Discover</button>
+                                    <button class="con5013-btn" onclick="con5013.testAllEndpoints()">Test All</button>
+                                    <button class="con5013-btn secondary" onclick="con5013.exportApiResults()">Export</button>
+                                </div>
+                                
+                                <div id="con5013-api-stats" class="con5013-api-stats">
+                                    <div class="con5013-stat">
+                                        <div class="con5013-stat-value" id="total-endpoints">0</div>
+                                        <div class="con5013-stat-label">Total Endpoints</div>
+                                    </div>
+                                    <div class="con5013-stat">
+                                        <div class="con5013-stat-value" id="working-endpoints">0</div>
+                                        <div class="con5013-stat-label">Working</div>
+                                    </div>
+                                    <div class="con5013-stat">
+                                        <div class="con5013-stat-value" id="failed-endpoints">0</div>
+                                        <div class="con5013-stat-label">Failed</div>
+                                    </div>
+                                    <div class="con5013-stat">
+                                        <div class="con5013-stat-value" id="avg-response-time">0ms</div>
+                                        <div class="con5013-stat-label">Avg Response</div>
+                                    </div>
+                                </div>
+                                
+                                <div id="con5013-endpoints" class="con5013-endpoints">
+                                    <div style="padding: 40px; text-align: center; color: #9ca3af;">
+                                        Click "Discover" to scan API endpoints
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- System Tab -->
+                        <div id="con5013-system-tab" class="con5013-tab-content">
+                            <div class="con5013-ascii">
+  __|   _ \\   \\ |  __|    \\ _ | __ /
+ (     (   | .  | __ \\  (  |  |  _ \\
+\\___| \\___/ _|\\_| ___/ \\__/  _| ___/
+            </div>
+                            <div class="con5013-subtitle">System Performance & Monitoring</div>
+                            
+                            <div id="con5013-system" class="con5013-system">
+                                <div class="con5013-system-card">
+                                    <div class="con5013-system-title">System Info</div>
+                                    <div class="con5013-metric">
+                                        <span class="con5013-metric-label">Platform</span>
+                                        <span class="con5013-metric-value" id="system-platform">Loading...</span>
+                                    </div>
+                                    <div class="con5013-metric">
+                                        <span class="con5013-metric-label">Python Version</span>
+                                        <span class="con5013-metric-value" id="python-version">Loading...</span>
+                                    </div>
+                                    <div class="con5013-metric">
+                                        <span class="con5013-metric-label">Uptime</span>
+                                        <span class="con5013-metric-value" id="system-uptime">Loading...</span>
+                                    </div>
+                                    <div class="con5013-metric">
+                                        <span class="con5013-metric-label">Hostname</span>
+                                        <span class="con5013-metric-value" id="system-hostname">Loading...</span>
+                                    </div>
+                                    <div class="con5013-metric">
+                                        <span class="con5013-metric-label">Architecture</span>
+                                        <span class="con5013-metric-value" id="system-arch">Loading...</span>
+                                    </div>
+                                </div>
+
+                                <div class="con5013-system-card">
+                                    <div class="con5013-system-title">GPU</div>
+                                    <div id="con5013-gpu-list" class="con5013-gpu-list">
+                                        <div class="con5013-metric">
+                                            <span class="con5013-metric-label">GPUs</span>
+                                            <span class="con5013-metric-value" id="gpu-count">Detecting...</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="con5013-system-card">
+                                    <div class="con5013-system-title">Performance</div>
+                                    <div class="con5013-metric has-progress">
+                                        <span class="con5013-metric-label">CPU Usage</span>
+                                        <span class="con5013-metric-value" id="cpu-usage">Loading...</span>
+                                    </div>
+                                    <div class="con5013-progress after-metric">
+                                        <div class="con5013-progress-bar" id="cpu-progress" style="width: 0%"></div>
+                                    </div>
+                                    <div class="con5013-divider"></div>
+                                    <div class="con5013-metric has-progress">
+                                        <span class="con5013-metric-label">Memory Usage</span>
+                                        <span class="con5013-metric-value" id="memory-usage">Loading...</span>
+                                    </div>
+                                    <div class="con5013-progress after-metric">
+                                        <div class="con5013-progress-bar" id="memory-progress" style="width: 0%"></div>
+                                    </div>
+                                    <div class="con5013-divider"></div>
+                                </div>
+
+                                <div class="con5013-system-card">
+                                    <div class="con5013-system-title">Network</div>
+                                    <div class="con5013-metric">
+                                        <span class="con5013-metric-label">Download</span>
+                                        <span class="con5013-metric-value" id="net-down">0 B/s</span>
+                                    </div>
+                                    <div class="con5013-metric">
+                                        <span class="con5013-metric-label">Upload</span>
+                                        <span class="con5013-metric-value" id="net-up">0 B/s</span>
+                                    </div>
+                                    <div class="con5013-metric">
+                                        <span class="con5013-metric-label">Connections</span>
+                                        <span class="con5013-metric-value" id="net-conns">0</span>
+                                    </div>
+                                    <div class="con5013-metric">
+                                        <span class="con5013-metric-label">Totals</span>
+                                        <span class="con5013-metric-value" id="net-totals">0 / 0</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="con5013-system-card">
+                                    <div class="con5013-system-title">Application</div>
+                                    <div class="con5013-metric">
+                                        <span class="con5013-metric-label">Routes</span>
+                                        <span class="con5013-metric-value" id="app-routes">Loading...</span>
+                                    </div>
+                                    <div class="con5013-metric">
+                                        <span class="con5013-metric-label">Extensions</span>
+                                        <span class="con5013-metric-value" id="app-extensions">Loading...</span>
+                                    </div>
+                                    <div class="con5013-metric">
+                                        <span class="con5013-metric-label">Debug Mode</span>
+                                        <span class="con5013-metric-value" id="app-debug">Loading...</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="con5013-system-card">
+                                    <div class="con5013-system-title">Storage</div>
+                                    <div class="con5013-metric has-progress">
+                                        <span class="con5013-metric-label">Disk Usage</span>
+                                        <span class="con5013-metric-value" id="disk-usage">Loading...</span>
+                                    </div>
+                                    <div class="con5013-progress after-metric">
+                                        <div class="con5013-progress-bar" id="disk-progress" style="width: 0%"></div>
+                                    </div>
+                                    <div class="con5013-divider"></div>
+                                    <div class="con5013-metric">
+                                        <span class="con5013-metric-label">Free Space</span>
+                                        <span class="con5013-metric-value" id="disk-free">Loading...</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Add to body
+        document.body.insertAdjacentHTML('beforeend', consoleHTML);
+    }
+
+    createFloatingButton() {
+        // Respect opt-out via meta or option
+        const metaNoFab = document.querySelector('meta[name="con5013-no-fab"][content="1"]');
+        if (metaNoFab || !this.options.autoFloatingButton) return;
+
+        // If a custom Con5013 button exists, wire it and optionally hide FAB
+        const customBtn = document.querySelector(this.options.customButtonSelector);
+        if (customBtn) {
+            try { customBtn.addEventListener('click', (e) => { e.preventDefault(); this.toggle(); }); } catch (_) {}
+            if (this.options.hideFabIfCustomButton) return; // do not render default FAB
+        }
+
+        if (document.getElementById('con5013-fab')) return; // already created
+
+        const fab = document.createElement('button');
+        fab.id = 'con5013-fab';
+        fab.type = 'button';
+        fab.className = `con5013-fab ${this.options.floatingButtonPosition}`;
+        fab.setAttribute('aria-label', 'Open Con5013 Console');
+        fab.innerHTML = `<span class="con5013-fab-ring"></span>
+            <span class="con5013-fab-icon" aria-hidden="true">
+                <svg id="con5013-b-icon" width="36" height="18" viewBox="0 0 240 120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="CON5013 monogram icon">
+                  <rect x="8" y="8" rx="16" ry="16" width="224" height="104" fill="#0d1520" stroke="#1f2a37" stroke-width="2" />
+                  <path d="M56 60 l36 -24" stroke="#31d0aa" stroke-width="8" stroke-linecap="round" fill="none" />
+                  <path d="M56 60 l36 24" stroke="#31d0aa" stroke-width="8" stroke-linecap="round" fill="none" />
+                  <path d="M188 36 l-40 48" stroke="#7aa2f7" stroke-width="8" stroke-linecap="round" fill="none" />
+                  <path d="M112 60 h16" stroke="#cbd5e1" stroke-width="8" stroke-linecap="round" />
+                </svg>
+            </span>`;
+        fab.addEventListener('click', () => this.toggle());
+        // Prevent unstyled flash until CSS is applied
+        fab.style.display = 'none';
+        document.body.appendChild(fab);
+
+        // Initial visibility sync
+        this.updateFabVisibility();
+    }
+
+    updateFabVisibility() {
+        const fab = document.getElementById('con5013-fab');
+        if (!fab) return;
+        if (this.options.hideFabWhenOpen && this.isOpen) {
+            fab.classList.add('hidden');
+        } else {
+            fab.classList.remove('hidden');
+        }
+    }
+    
+    bindEvents() {
+        // Tab switching
+        document.querySelectorAll('.con5013-tab').forEach(tab => {
+            tab.addEventListener('click', (e) => {
+                this.switchTab(e.target.dataset.tab);
+            });
+        });
+        
+        // Terminal input
+        const terminalInput = document.getElementById('con5013-terminal-command');
+        if (terminalInput) {
+            const autoResize = () => {
+                terminalInput.style.height = 'auto';
+                const maxPx = Math.round(window.innerHeight * 0.4);
+                const cs = window.getComputedStyle(terminalInput);
+                const lh = parseFloat(cs.lineHeight) || (parseFloat(cs.fontSize) * 1.4) || 18;
+                const pad = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+                const minPx = Math.ceil(lh + pad);
+                const desired = Math.max(minPx, Math.min(terminalInput.scrollHeight, maxPx));
+                terminalInput.style.height = desired + 'px';
+            };
+            terminalInput.addEventListener('input', autoResize);
+            // Initialize height
+            autoResize();
+            terminalInput.addEventListener('keydown', (e) => {
+                // Shift+Enter inserts a newline
+                if (e.key === 'Enter' && e.shiftKey) {
+                    // allow default newline in textarea
+                    return;
+                }
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this.executeTerminalCommand(e.target.value);
+                    e.target.value = '';
+                    autoResize();
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    this.navigateTerminalHistory(-1);
+                    autoResize();
+                } else if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    this.navigateTerminalHistory(1);
+                    autoResize();
+                }
+            });
+        }
+        
+        // Logs scroll pause/resume
+        const logsContainer = document.getElementById('con5013-logs');
+        if (logsContainer) {
+            logsContainer.addEventListener('scroll', () => this.onLogsScroll());
+        }
+        const logsResume = document.getElementById('con5013-logs-resume');
+        if (logsResume) {
+            logsResume.addEventListener('click', (event) => {
+                event.preventDefault();
+                this.resumeLogAutoScroll(true);
+            });
+        }
+        
+        // Close on escape
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && this.isOpen) {
+                this.close();
+            }
+        });
+        
+        // Close on overlay click
+        document.getElementById('con5013-overlay').addEventListener('click', (e) => {
+            if (e.target.id === 'con5013-overlay') {
+                this.close();
+            }
+        });
+    }
+    
+    setupHotkey() {
+        document.addEventListener('keydown', (e) => {
+            // Default hotkey: Alt + C
+            const key = (e.key || '').toLowerCase();
+            if (e.altKey && key === 'c') {
+                e.preventDefault();
+                this.toggle();
+            }
+        });
+    }
+    
+    async loadInitialData() {
+        try {
+            const res = await fetch(`${this.options.baseUrl}/api/info`);
+            const payload = await res.json();
+            if (payload && payload.info && payload.info.features) {
+                this.features = payload.info.features;
+            }
+            if (payload && payload.info && payload.info.default_log_source) {
+                this.defaultLogSource = payload.info.default_log_source;
+            }
+            this.setConnectivity(true);
+        } catch (e) {
+            // ignore; keep defaults (all enabled)
+            this.setConnectivity(false);
+        }
+        this.applyFeatureToggles();
+        // Load per-feature data
+        if (this.features.logs) {
+            await this.loadLogSources();
+            await this.refreshLogs();
+        }
+        if (this.features.system_monitor) {
+            await this.refreshSystemStats();
+        }
+    }
+
+    applyFeatureToggles() {
+        // Hide tabs and panels based on feature flags
+        const hideTab = (name, enabled) => {
+            const tabBtn = document.querySelector(`.con5013-tab[data-tab="${name}"]`);
+            const panel = document.getElementById(`con5013-${name}-tab`);
+            if (!enabled) {
+                tabBtn?.parentElement?.removeChild(tabBtn);
+                panel?.parentElement?.removeChild(panel);
+                if (this.currentTab === name) {
+                    // Switch to a next available tab
+                    const order = ['logs','terminal','api','system'];
+                    for (const t of order) {
+                        if (t !== name) {
+                            if ((t === 'logs' && this.features.logs) ||
+                                (t === 'terminal' && this.features.terminal) ||
+                                (t === 'api' && this.features.api_scanner) ||
+                                (t === 'system' && this.features.system_monitor)) {
+                                this.switchTab(t);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        };
+        hideTab('logs', !!this.features.logs);
+        hideTab('terminal', !!this.features.terminal);
+        hideTab('api', !!this.features.api_scanner);
+        hideTab('system', !!this.features.system_monitor);
+    }
+    
+    startPeriodicUpdates() {
+        setInterval(() => {
+            if (this.isOpen) {
+                if (this.currentTab === 'logs' && this.features.logs) {
+                    this.refreshLogs();
+                } else if (this.currentTab === 'system' && this.features.system_monitor) {
+                    this.refreshSystemStats();
+                }
+            }
+        }, this.options.updateInterval);
+    }
+    
+    // Public API
+    open() {
+        this.isOpen = true;
+        const overlay = document.getElementById('con5013-overlay');
+        overlay.classList.add('open');
+        this.updateFabVisibility();
+        
+        // Focus terminal input if on terminal tab
+        if (this.currentTab === 'terminal') {
+            setTimeout(() => {
+                document.getElementById('con5013-terminal-command')?.focus();
+            }, 300);
+        }
+    }
+    
+    close() {
+        this.isOpen = false;
+        const overlay = document.getElementById('con5013-overlay');
+        overlay.classList.remove('open');
+        this.updateFabVisibility();
+    }
+    
+    toggle() {
+        if (this.isOpen) {
+            this.close();
+        } else {
+            this.open();
+        }
+    }
+    
+    switchTab(tabName) {
+        // Update tab buttons
+        document.querySelectorAll('.con5013-tab').forEach(tab => {
+            tab.classList.remove('active');
+        });
+        document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+        
+        // Update tab content
+        document.querySelectorAll('.con5013-tab-content').forEach(content => {
+            content.classList.remove('active');
+        });
+        document.getElementById(`con5013-${tabName}-tab`).classList.add('active');
+        
+        this.currentTab = tabName;
+        
+        // Load tab-specific data
+        if (tabName === 'terminal') {
+            setTimeout(() => {
+                document.getElementById('con5013-terminal-command')?.focus();
+            }, 100);
+        } else if (tabName === 'system') {
+            this.refreshSystemStats();
+        }
+    }
+    
+    // Logs functionality
+    async refreshLogs() {
+        try {
+            const params = new URLSearchParams();
+            if (this.currentLogSource) params.set('source', this.currentLogSource);
+            if (this.currentLogLevel) params.set('level', this.currentLogLevel);
+            const response = await fetch(`${this.options.baseUrl}/api/logs?${params.toString()}`);
+            const payload = await response.json();
+            const logs = payload && payload.logs ? payload.logs : (Array.isArray(payload) ? payload : []);
+            this.displayLogs(logs);
+            this.setConnectivity(true);
+        } catch (error) {
+            console.error('Error refreshing logs:', error);
+            this.setConnectivity(false);
+        }
+    }
+    
+    displayLogs(logs) {
+        const logsContainer = document.getElementById('con5013-logs');
+        if (!logsContainer) return;
+        
+        const list = Array.isArray(logs) ? [...logs] : [];
+        if (this.currentLogSort === 'asc') list.reverse();
+        const logsHTML = list.map(log => {
+            const timestamp = new Date(log.timestamp * 1000).toLocaleTimeString();
+            return `
+                <div class="con5013-log-entry">
+                    <span class="con5013-log-timestamp">${timestamp}</span>
+                    <span class="con5013-log-level ${log.level}">${log.level}</span>
+                    <span class="con5013-log-message">${this.escapeHtml(log.message)}</span>
+                </div>
+            `;
+        }).join('');
+        
+        const previousScrollTop = logsContainer.scrollTop;
+        const previousScrollHeight = logsContainer.scrollHeight;
+
+        logsContainer.innerHTML = logsHTML;
+
+        if (!this.logAutoScrollPaused) {
+            this.autoScrollLogs();
+        } else {
+            const newScrollHeight = logsContainer.scrollHeight;
+            if (this.currentLogSort === 'desc') {
+                const delta = newScrollHeight - previousScrollHeight;
+                logsContainer.scrollTop = Math.max(0, previousScrollTop + delta);
+            } else {
+                const maxScroll = Math.max(0, newScrollHeight - logsContainer.clientHeight);
+                logsContainer.scrollTop = Math.min(previousScrollTop, maxScroll);
+            }
+        }
+    }
+
+    autoScrollLogs() {
+        const logsContainer = document.getElementById('con5013-logs');
+        if (!logsContainer) return;
+
+        if (this.currentLogSort === 'asc') {
+            logsContainer.scrollTop = logsContainer.scrollHeight;
+        } else {
+            logsContainer.scrollTop = 0;
+        }
+    }
+
+    onLogsScroll() {
+        const logsContainer = document.getElementById('con5013-logs');
+        if (!logsContainer) return;
+
+        const resumeThreshold = 10;
+        const atTop = logsContainer.scrollTop <= resumeThreshold;
+        const atBottom = (logsContainer.scrollHeight - logsContainer.clientHeight - logsContainer.scrollTop) <= resumeThreshold;
+        // Determine if the viewport is anchored to the edge we auto-scroll toward.
+        const alignedWithLiveEdge = this.currentLogSort === 'asc' ? atBottom : atTop;
+
+        if (alignedWithLiveEdge) {
+            if (this.logAutoScrollPaused) {
+                this.resumeLogAutoScroll(false);
+            }
+        } else if (!this.logAutoScrollPaused) {
+            this.pauseLogAutoScroll();
+        }
+    }
+
+    pauseLogAutoScroll() {
+        if (this.logAutoScrollPaused) return;
+        this.logAutoScrollPaused = true;
+        this.toggleLogAutoScrollIndicator(true);
+    }
+
+    resumeLogAutoScroll(snap = false) {
+        const wasPaused = this.logAutoScrollPaused;
+        this.logAutoScrollPaused = false;
+        this.toggleLogAutoScrollIndicator(false);
+        if (snap || wasPaused) {
+            this.autoScrollLogs();
+        }
+    }
+
+    toggleLogAutoScrollIndicator(show) {
+        const indicator = document.getElementById('con5013-logs-autoscroll-indicator');
+        if (!indicator) return;
+        indicator.style.display = show ? 'flex' : 'none';
+    }
+
+    async clearLogs() {
+        try {
+            await fetch(`${this.options.baseUrl}/api/logs/clear`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ source: this.currentLogSource || 'app' })
+            });
+            this.refreshLogs();
+        } catch (e) {
+            console.error('Failed to clear logs', e);
+        }
+    }
+    
+    exportLogs() {
+        try {
+            const rows = document.querySelectorAll('#con5013-logs .con5013-log-entry');
+            const data = Array.from(rows).map(r => r.textContent.trim());
+            const blob = new Blob([data.join('\n')], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const src = this.currentLogSource || 'logs';
+            a.download = `con5013_${src}_logs.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (e) {
+            console.error('Export failed', e);
+        }
+    }
+    
+    // Terminal functionality
+    async executeTerminalCommand(command) {
+        if (!command.trim()) return;
+        
+        // Add to history
+        this.terminalHistory.push(command);
+        this.terminalHistoryIndex = this.terminalHistory.length;
+        
+        // Display command in output
+        this.addTerminalOutput(`con5013@flask:~$ ${command}`, 'command');
+        
+        try {
+            const response = await fetch(`${this.options.baseUrl}/api/terminal/execute`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ command })
+            });
+            
+            const payload = await response.json();
+            const result = payload && payload.result ? payload.result : payload;
+            this.addTerminalOutput(result.output || JSON.stringify(result), result.type || 'text');
+            this.setConnectivity(true);
+        } catch (error) {
+            this.addTerminalOutput(`Error: ${error.message}`, 'error');
+            this.setConnectivity(false);
+        }
+        // Reset input height after execution
+        const inputEl = document.getElementById('con5013-terminal-command');
+        if (inputEl) {
+            inputEl.style.height = 'auto';
+        }
+    }
+    
+    addTerminalOutput(text, type = 'text') {
+        const output = document.getElementById('con5013-terminal-output');
+        if (!output) return;
+
+        // Handle clear type
+        if (type === 'clear') {
+            output.innerHTML = '';
+            return;
+        }
+
+        // Command echo styling
+        if (type === 'command') {
+            const div = document.createElement('div');
+            div.textContent = text;
+            div.style.color = '#10b981';
+            div.style.fontWeight = 'bold';
+            output.appendChild(div);
+            output.scrollTop = output.scrollHeight;
+            return;
+        }
+
+        // Pretty formatting for common content types
+        const block = document.createElement('div');
+        block.className = 'con5013-term-block';
+
+        let detected = this.detectContentFormat(text);
+        let pretty = this.formatContent(text, detected);
+
+        // Header label
+        const label = document.createElement('div');
+        label.className = 'con5013-code-label';
+        label.textContent = detected.toUpperCase();
+        block.appendChild(label);
+
+        const pre = document.createElement('pre');
+        pre.className = `con5013-code con5013-lang-${detected}`;
+        pre.textContent = pretty; // keep escaped for safety
+        block.appendChild(pre);
+
+        if (type === 'error') {
+            block.style.borderColor = 'var(--con5013-error)';
+        }
+
+        output.appendChild(block);
+        output.scrollTop = output.scrollHeight;
+    }
+
+    // Determine content format using simple hints
+    detectContentFormat(text) {
+        if (!text || typeof text !== 'string') return 'text';
+
+        // Heuristic for our HTTP helper output
+        if (text.startsWith('HTTP ') && text.includes('Headers:')) {
+            const ctMatch = text.match(/content-type=([^\n\r]+)/i);
+            const ct = (ctMatch && ctMatch[1] || '').toLowerCase();
+            if (ct.includes('json')) return 'json';
+            if (ct.includes('html')) return 'html';
+            if (ct.includes('css')) return 'css';
+            if (ct.includes('javascript') || ct.includes('ecmascript')) return 'js';
+            if (ct.includes('text/plain')) return 'text';
+        }
+
+        // Raw JSON detection
+        const trimmed = text.trim();
+        if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+            try { JSON.parse(trimmed); return 'json'; } catch (_) {}
+        }
+        // HTML hint
+        if (trimmed.startsWith('<') && trimmed.includes('>')) return 'html';
+        // CSS hint
+        if (/\{\s*[^}]*:\s*[^}]*\}/m.test(trimmed)) return 'css';
+        // JS/PY hints (very rough)
+        if (/\bfunction\b|=>|console\./.test(trimmed)) return 'js';
+        if (/\bdef\b|\bimport\b|\bclass\b/.test(trimmed)) return 'py';
+        return 'text';
+    }
+
+    // Format content based on detected type
+    formatContent(text, kind) {
+        if (!text || typeof text !== 'string') return String(text || '');
+
+        // If HTTP helper output, split headers/body so we pretty-print only the body
+        let headers = '';
+        let body = text;
+        if (text.startsWith('HTTP ') && text.includes('\n\n')) {
+            const idx = text.indexOf('\n\n');
+            headers = text.substring(0, idx);
+            body = text.substring(idx + 2);
+            // keep headers on top of pretty body
+        }
+
+        try {
+            switch (kind) {
+                case 'json': {
+                    const pretty = JSON.stringify(JSON.parse(body.trim()), null, 2);
+                    return headers ? `${headers}\n\n${pretty}` : pretty;
+                }
+                case 'html': {
+                    const formatted = body.replace(/>\s*</g, '>$NEWLINE<$').replace(/\$NEWLINE\$/g, '$NEWLINE$');
+                    const withBreaks = formatted.split('$NEWLINE$').join('\n');
+                    return headers ? `${headers}\n\n${withBreaks}` : withBreaks;
+                }
+                case 'css': {
+                    let s = body
+                        .replace(/;/g, ';\n')
+                        .replace(/\{/g, '{\n')
+                        .replace(/\}/g, '\n}\n');
+                    return headers ? `${headers}\n\n${s}` : s;
+                }
+                case 'js': {
+                    let s = body.replace(/;\s*/g, ';\n').replace(/\{\s*/g, '{\n').replace(/\}\s*/g, '\n}\n');
+                    return headers ? `${headers}\n\n${s}` : s;
+                }
+                case 'py': {
+                    // For Python, keep as-is but ensure lines are visible
+                    return headers ? `${headers}\n\n${body}` : body;
+                }
+                default:
+                    return text;
+            }
+        } catch (_) {
+            return text;
+        }
+    }
+    
+    navigateTerminalHistory(direction) {
+        const input = document.getElementById('con5013-terminal-command');
+        if (!input || this.terminalHistory.length === 0) return;
+        
+        this.terminalHistoryIndex += direction;
+        
+        if (this.terminalHistoryIndex < 0) {
+            this.terminalHistoryIndex = 0;
+        } else if (this.terminalHistoryIndex >= this.terminalHistory.length) {
+            this.terminalHistoryIndex = this.terminalHistory.length;
+            input.value = '';
+            return;
+        }
+        
+        input.value = this.terminalHistory[this.terminalHistoryIndex] || '';
+    }
+    
+    // API functionality
+    async discoverEndpoints() {
+        try {
+            const response = await fetch(`${this.options.baseUrl}/api/scanner/discover`);
+            const payload = await response.json();
+            const endpoints = payload && payload.endpoints ? payload.endpoints : [];
+            this.endpoints = endpoints;
+            this.displayEndpoints(endpoints);
+            this.updateApiStats();
+            this.setConnectivity(true);
+        } catch (error) {
+            console.error('Error discovering endpoints:', error);
+            this.setConnectivity(false);
+        }
+    }
+    
+    displayEndpoints(endpoints) {
+        const container = document.getElementById('con5013-endpoints');
+        if (!container) return;
+        
+        if (endpoints.length === 0) {
+            container.innerHTML = '<div style="padding: 40px; text-align: center; color: #9ca3af;">No endpoints found</div>';
+            return;
+        }
+        
+        const endpointsHTML = endpoints.map(endpoint => {
+            const termBtn = this.features.terminal
+                ? `<button class="con5013-btn secondary" onclick="con5013.runEndpointInTerminal('${(endpoint.sample_path || endpoint.rule).replace(/'/g, "\'")}', '${endpoint.methods[0]}')">Run in Terminal</button>`
+                : '';
+            return `
+            <div class="con5013-endpoint">
+                <div class="con5013-endpoint-info">
+                    <div class="con5013-endpoint-url">${endpoint.rule}</div>
+                    <div class="con5013-endpoint-methods">
+                        ${endpoint.methods.map(method => `<span class=\"con5013-method ${method}\">${method}</span>`).join('')}
+                    </div>
+                </div>
+                <div class="con5013-endpoint-status">
+                    <div class="con5013-status-indicator" id="status-${endpoint.rule.replace(/[^a-zA-Z0-9]/g, '')}"></div>
+                    <button class="con5013-btn" onclick="con5013.testEndpoint('${(endpoint.sample_path || endpoint.rule).replace(/'/g, "\'")}', '${endpoint.methods[0]}')">Test</button>
+                    ${termBtn}
+                </div>
+            </div>`;
+        }).join('');
+        
+        container.innerHTML = endpointsHTML;
+    }
+    
+    async testEndpoint(pathOrUrl, method) {
+        const statusIndicator = document.querySelector(`#status-${(pathOrUrl || '').replace(/[^a-zA-Z0-9]/g, '')}`);
+        if (statusIndicator) {
+            statusIndicator.className = 'con5013-status-indicator testing';
+        }
+        
+        try {
+            const response = await fetch(`${this.options.baseUrl}/api/scanner/test`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ endpoint: pathOrUrl, method })
+            });
+            
+            const payload = await response.json();
+            const result = payload && payload.result ? payload.result : payload;
+            
+            if (statusIndicator) {
+                statusIndicator.className = `con5013-status-indicator ${result.status === 'success' ? 'success' : 'error'}`;
+            }
+            this.setConnectivity(true);
+        } catch (error) {
+            if (statusIndicator) {
+                statusIndicator.className = 'con5013-status-indicator error';
+            }
+            this.setConnectivity(false);
+        }
+    }
+    
+    async testAllEndpoints() {
+        try {
+            const response = await fetch(`${this.options.baseUrl}/api/scanner/test-all`, { method: 'POST' });
+            const payload = await response.json();
+            const results = payload && payload.results ? payload.results : payload;
+            this.displayTestResults(results);
+            this.updateApiStats(results);
+            this.setConnectivity(true);
+        } catch (error) {
+            console.error('Error testing endpoints:', error);
+            this.setConnectivity(false);
+        }
+    }
+    
+    displayTestResults(results) {
+        // Accept either the aggregated results object or just the payload
+        const list = Array.isArray(results) ? results : (results && results.results ? results.results : []);
+        // Update status indicators based on results
+        list.forEach(result => {
+            const statusIndicator = document.querySelector(`#status-${result.endpoint.replace(/[^a-zA-Z0-9]/g, '')}`);
+            if (statusIndicator) {
+                statusIndicator.className = `con5013-status-indicator ${result.status === 'success' ? 'success' : 'error'}`;
+            }
+        });
+    }
+
+    async runEndpointInTerminal(pathOrUrl, method) {
+        // Build http command for the terminal engine
+        const cmd = `http ${method} ${pathOrUrl}`;
+        // Switch to terminal tab
+        this.switchTab('terminal');
+        // Prefill input for user visibility
+        const input = document.getElementById('con5013-terminal-command');
+        if (input) input.value = cmd;
+        // Let user see the typed command for ~0.2s
+        await new Promise(res => setTimeout(res, 200));
+        // Execute and then clear the input so it won't run twice accidentally
+        await this.executeTerminalCommand(cmd);
+        const inputAfter = document.getElementById('con5013-terminal-command');
+        if (inputAfter) inputAfter.value = '';
+    }
+    
+    updateApiStats(results = null) {
+        if (results) {
+            const agg = results && results.total_endpoints !== undefined ? results : (results.results ? results : null);
+            const stats = agg && agg.total_endpoints !== undefined ? agg : (agg ? agg.results : null);
+            if (stats) {
+                document.getElementById('total-endpoints').textContent = stats.total_endpoints || 0;
+                document.getElementById('working-endpoints').textContent = stats.successful_tests || 0;
+                document.getElementById('failed-endpoints').textContent = stats.failed_tests || 0;
+                document.getElementById('avg-response-time').textContent = `${Math.round(stats.average_response_time || 0)}ms`;
+                return;
+            }
+            // Fallback to counting endpoints if stats not available
+            document.getElementById('total-endpoints').textContent = this.endpoints.length;
+        } else {
+            document.getElementById('total-endpoints').textContent = this.endpoints.length;
+        }
+    }
+    
+    exportApiResults() {
+        alert('Export API results functionality - to be implemented');
+    }
+    
+    // System functionality
+    async refreshSystemStats() {
+        try {
+            const response = await fetch(`${this.options.baseUrl}/api/system/stats`);
+            const payload = await response.json();
+            const stats = payload && payload.stats ? payload.stats : payload;
+            this.systemStats = stats || {};
+            this.displaySystemStats(this.systemStats);
+            this.setConnectivity(true);
+        } catch (error) {
+            console.error('Error refreshing system stats:', error);
+            this.setConnectivity(false);
+        }
+    }
+    
+    displaySystemStats(stats) {
+        // System info
+        if (stats.system) {
+            document.getElementById('system-platform').textContent = stats.system.platform || 'Unknown';
+            document.getElementById('python-version').textContent = stats.system.python_version || 'Unknown';
+            const hostEl = document.getElementById('system-hostname');
+            if (hostEl) hostEl.textContent = stats.system.hostname || 'Unknown';
+            const archEl = document.getElementById('system-arch');
+            if (archEl) archEl.textContent = (stats.system.machine || stats.system.arch || 'Unknown');
+        }
+        
+        // Application info
+        if (stats.application) {
+            document.getElementById('app-routes').textContent = stats.application.routes_count || '0';
+            document.getElementById('app-extensions').textContent = stats.application.extensions?.length || '0';
+            document.getElementById('app-debug').textContent = stats.application.debug ? 'Enabled' : 'Disabled';
+            
+            if (stats.application.uptime_formatted) {
+                document.getElementById('system-uptime').textContent = stats.application.uptime_formatted;
+            } else if (typeof stats.application.uptime_seconds === 'number') {
+                document.getElementById('system-uptime').textContent = this.formatDuration(stats.application.uptime_seconds);
+            }
+        }
+        
+        // Performance metrics
+        if (stats.cpu) {
+            const cpuUsage = Math.round(stats.cpu.usage_percent || 0);
+            document.getElementById('cpu-usage').textContent = `${cpuUsage}%`;
+            document.getElementById('cpu-progress').style.width = `${cpuUsage}%`;
+            
+            // Color coding
+            const cpuProgress = document.getElementById('cpu-progress');
+            cpuProgress.className = 'con5013-progress-bar';
+            if (cpuUsage > 80) cpuProgress.classList.add('error');
+            else if (cpuUsage > 60) cpuProgress.classList.add('warning');
+        }
+        
+        if (stats.memory && stats.memory.virtual) {
+            const memoryUsage = Math.round(stats.memory.virtual.percent || 0);
+            document.getElementById('memory-usage').textContent = `${memoryUsage}% (${stats.memory.virtual.used_gb}GB / ${stats.memory.virtual.total_gb}GB)`;
+            document.getElementById('memory-progress').style.width = `${memoryUsage}%`;
+            
+            // Color coding
+            const memoryProgress = document.getElementById('memory-progress');
+            memoryProgress.className = 'con5013-progress-bar';
+            if (memoryUsage > 80) memoryProgress.classList.add('error');
+            else if (memoryUsage > 60) memoryProgress.classList.add('warning');
+        }
+        
+        if (stats.disk && stats.disk.usage) {
+            const diskUsage = Math.round(stats.disk.usage.percent || 0);
+            document.getElementById('disk-usage').textContent = `${diskUsage}%`;
+            document.getElementById('disk-free').textContent = `${stats.disk.usage.free_gb}GB free`;
+            document.getElementById('disk-progress').style.width = `${diskUsage}%`;
+            
+            // Color coding
+            const diskProgress = document.getElementById('disk-progress');
+            diskProgress.className = 'con5013-progress-bar';
+            if (diskUsage > 90) diskProgress.classList.add('error');
+            else if (diskUsage > 75) diskProgress.classList.add('warning');
+        }
+
+        // GPU info (if available)
+        const gpuList = document.getElementById('con5013-gpu-list');
+        if (gpuList && stats.gpus && (stats.gpus.devices || stats.gpus).length !== undefined) {
+            const g = stats.gpus.devices ? stats.gpus : { devices: stats.gpus.devices, count: stats.gpus.count };
+            const devices = g.devices || [];
+            const countEl = document.getElementById('gpu-count');
+            if (countEl) countEl.textContent = String(devices.length);
+            // Render each GPU
+            const inner = devices.map(dev => {
+                const util = Math.round(dev.utilization_percent || 0);
+                const memUsed = dev.memory_used_mb || 0;
+                const memTotal = dev.memory_total_mb || 0;
+                const memPct = memTotal ? Math.round((memUsed / memTotal) * 100) : 0;
+                const temp = dev.temperature_c;
+                const utilClass = util > 80 ? 'error' : (util > 60 ? 'warning' : 'ok');
+                const tempClass = (temp !== null && temp !== undefined) ? (temp > 85 ? 'error' : (temp > 70 ? 'warning' : 'ok')) : 'ok';
+                const memString = `${this.formatBytes(memUsed * 1024 * 1024)} / ${this.formatBytes(memTotal * 1024 * 1024)}`;
+                return `
+                    <div class="con5013-metric has-progress">
+                        <span class="con5013-metric-label">${this.escapeHtml(dev.name || ('GPU ' + dev.index))}</span>
+                        <span class="con5013-metric-value">
+                            <span class="con5013-badges">
+                                <span class="con5013-badge ${utilClass}">${util}%</span>
+                                <span class="con5013-badge">${memString}</span>
+                                ${temp !== null && temp !== undefined ? `<span class="con5013-badge ${tempClass}">${temp}°C</span>` : ''}
+                            </span>
+                        </span>
+                    </div>
+                    <div class="con5013-progress after-metric">
+                        <div class="con5013-progress-bar${util>80?' error':(util>60?' warning':'')}" style="width:${util}%"></div>
+                    </div>
+                    <div class="con5013-divider"></div>
+                `;
+            }).join('');
+            // Keep the count metric on top, then add details
+            gpuList.innerHTML = `
+                <div class="con5013-metric">
+                    <span class="con5013-metric-label">GPUs</span>
+                    <span class="con5013-metric-value" id="gpu-count">${devices.length}</span>
+                </div>
+                ${inner}
+            `;
+        }
+
+        // Network info (rates computed client-side)
+        if (stats.network && stats.network.io) {
+            const io = stats.network.io;
+            const ts = stats.timestamp || (Date.now() / 1000);
+            let downRate = 0, upRate = 0;
+            if (this.prevNetwork && this.prevNetwork.ts && ts > this.prevNetwork.ts) {
+                const dt = ts - this.prevNetwork.ts;
+                const dRecv = Math.max(0, io.bytes_recv - (this.prevNetwork.bytes_recv || 0));
+                const dSent = Math.max(0, io.bytes_sent - (this.prevNetwork.bytes_sent || 0));
+                downRate = dRecv / dt;
+                upRate = dSent / dt;
+            }
+            const downEl = document.getElementById('net-down');
+            const upEl = document.getElementById('net-up');
+            const connsEl = document.getElementById('net-conns');
+            const totalsEl = document.getElementById('net-totals');
+            if (downEl) downEl.textContent = this.formatRate(downRate);
+            if (upEl) upEl.textContent = this.formatRate(upRate);
+            if (connsEl) connsEl.textContent = String(stats.network.connections_count || 0);
+            if (totalsEl) totalsEl.textContent = `${this.formatBytes(io.bytes_recv)} / ${this.formatBytes(io.bytes_sent)}`;
+
+            this.prevNetwork = { ts, bytes_recv: io.bytes_recv, bytes_sent: io.bytes_sent };
+        }
+    }
+    
+    // Utility functions
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    formatBytes(bytes) {
+        const units = ['B','KB','MB','GB','TB'];
+        let b = Math.max(0, Number(bytes) || 0), i = 0;
+        while (b >= 1024 && i < units.length - 1) { b /= 1024; i++; }
+        return `${b.toFixed(b < 10 && i>0 ? 1 : 0)} ${units[i]}`;
+    }
+    
+    formatRate(bps) {
+        // bytes per second to human readable
+        return `${this.formatBytes(bps)}/s`;
+    }
+    
+    formatDuration(seconds) {
+        const s = Math.max(0, Math.floor(seconds || 0));
+        const d = Math.floor(s / 86400);
+        const h = Math.floor((s % 86400) / 3600);
+        const m = Math.floor((s % 3600) / 60);
+        const sec = s % 60;
+        const parts = [];
+        if (d) parts.push(`${d}d`);
+        if (h) parts.push(`${h}h`);
+        if (m) parts.push(`${m}m`);
+        if (!parts.length || sec) parts.push(`${sec}s`);
+        return parts.join(' ');
+    }
+    
+    async loadLogSources() {
+        try {
+            const res = await fetch(`${this.options.baseUrl}/api/logs/sources`);
+            const payload = await res.json();
+            const sources = (payload && payload.sources) ? payload.sources : [];
+            const sel = document.getElementById('con5013-log-source');
+            if (sel) {
+                sel.innerHTML = '';
+                sources.forEach(s => {
+                    const opt = document.createElement('option');
+                    opt.value = s;
+                    opt.textContent = s;
+                    sel.appendChild(opt);
+                });
+                if (this.defaultLogSource && sources.includes(this.defaultLogSource)) {
+                    this.currentLogSource = this.defaultLogSource;
+                } else if (sources.includes('flask')) this.currentLogSource = 'flask';
+                else if (sources.length) this.currentLogSource = sources[0];
+                sel.value = this.currentLogSource;
+                sel.addEventListener('change', () => {
+                    this.currentLogSource = sel.value;
+                    this.refreshLogs();
+                });
+            }
+            const lvl = document.getElementById('con5013-log-level');
+            if (lvl) {
+                lvl.addEventListener('change', () => {
+                    this.currentLogLevel = lvl.value;
+                    this.refreshLogs();
+                });
+            }
+            const sort = document.getElementById('con5013-log-sort');
+            if (sort) {
+                sort.addEventListener('change', () => {
+                    this.currentLogSort = sort.value;
+                    this.resumeLogAutoScroll(false);
+                    this.refreshLogs();
+                });
+            }
+            this.setConnectivity(true);
+        } catch (e) {
+            console.error('Failed to load log sources', e);
+            this.setConnectivity(false);
+        }
+    }
+
+    // Connectivity indicator painter using inline SVG logo
+    setConnectivity(ok) {
+        this.connectivityOk = !!ok;
+        this.paintConnectivity();
+    }
+
+    paintConnectivity() {
+        const okColor = '#31d0aa';
+        const errColor = '#d03157';
+        const color = this.connectivityOk === false ? errColor : okColor;
+        try {
+            const svgs = document.querySelectorAll('#con5013-b-icon');
+            svgs.forEach(svg => {
+                const paths = svg.querySelectorAll('path');
+                if (paths.length >= 2) {
+                    paths[0].setAttribute('stroke', color);
+                    paths[1].setAttribute('stroke', color);
+                }
+            });
+        } catch (_) {}
+    }
+}
+
+// Global instance
+let con5013;
+
+// Initialize when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    con5013 = new Con5013Console();
+});
+
+// Export for module systems
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = Con5013Console;
+}
+
+
+
+

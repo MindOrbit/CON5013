@@ -1,0 +1,110 @@
+﻿[build-system]
+requires = [
+    "setuptools>=68",
+    "wheel"
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "con5013"
+version = "1.0.0"
+description = "The Ultimate Flask Console Extension - Monitor, Debug, and Control Your Flask Applications"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Con5013 Team", email = "team@con5013.dev" }
+]
+keywords = [
+    "flask",
+    "console",
+    "monitoring",
+    "debugging",
+    "terminal",
+    "api",
+    "logging",
+    "dashboard",
+    "con5013",
+    "crawl4ai"
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Framework :: Flask",
+    "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Software Development :: Debuggers",
+    "Topic :: System :: Logging",
+    "Topic :: System :: Monitoring",
+    "Topic :: System :: Systems Administration"
+]
+dependencies = [
+    "flask>=2.0.0",
+    "psutil>=5.8.0",
+    "requests>=2.25.0",
+    "werkzeug>=2.0.0",
+    "jinja2>=3.0.0"
+]
+
+[project.optional-dependencies]
+crawl4ai = ["crawl4ai>=0.2.0"]
+dev = ["pytest>=6.0", "black", "flake8", "mypy"]
+full = [
+    "websockets>=10.0",
+    "redis>=4.0.0",
+    "celery>=5.0.0"
+]
+
+[project.urls]
+Homepage = "https://con5013.dev"
+Documentation = "https://docs.con5013.dev"
+"Bug Reports" = "https://github.com/MindOrbit/CON5013/issues"
+Source = "https://github.com/MindOrbit/CON5013"
+
+[project.scripts]
+con5013 = "con5013.cli:main"
+
+[tool.setuptools]
+package-dir = { "" = "." }
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.setuptools.package-data]
+"con5013" = [
+    "static/css/*.css",
+    "static/js/*.js",
+    "static/assets/*",
+    "templates/*.html"
+]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+testpaths = [
+    "tests"
+]
+pythonpath = ["."]
+
+[tool.black]
+line-length = 100
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.flake8]
+max-line-length = 100
+extend-ignore = ["E203", "W503"]
+
+
+
+

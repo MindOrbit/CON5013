@@ -1,0 +1,1328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Con5013 Console</title>
+    
+    <!-- No external libraries; all styling self-contained for offline use -->
+    
+    <style>
+        :root {
+            --console-bg: #0d1117;
+            --console-surface: #161b22;
+            --console-border: #30363d;
+            --console-text: #c9d1d9;
+            --console-text-muted: #8b949e;
+            --console-accent: #00ff88;
+            --console-warning: #f85149;
+            --console-info: #58a6ff;
+            --console-success: #3fb950;
+            --console-error: #ff6b6b;
+            --terminal-bg: #000000;
+            --terminal-text: #00ff88;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+            background: var(--console-bg);
+            color: var(--console-text);
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        .console-container {
+            display: flex;
+            height: 100vh;
+            flex-direction: column;
+        }
+
+        .console-header {
+            background: var(--console-surface);
+            border-bottom: 1px solid var(--console-border);
+            padding: 15px 25px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+
+        .console-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--console-accent);
+        }
+
+        .console-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .console-btn {
+            background: transparent;
+            border: 1px solid var(--console-border);
+            color: var(--console-text);
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 14px;
+        }
+
+        .console-btn:hover {
+            background: var(--console-border);
+            border-color: var(--console-accent);
+        }
+
+        .console-main {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .console-sidebar {
+            width: 200px;
+            background: var(--console-surface);
+            border-right: 1px solid var(--console-border);
+            flex-shrink: 0;
+        }
+
+        .sidebar-nav {
+            padding: 20px 0;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+            padding: 12px 20px;
+            background: transparent;
+            border: none;
+            color: var(--console-text);
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 14px;
+            text-align: left;
+        }
+
+        .nav-item:hover {
+            background: var(--console-border);
+        }
+
+        .nav-item.active {
+            background: var(--console-accent);
+            color: #000;
+            border-right: 3px solid var(--console-accent);
+        }
+
+        .console-content {
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .content-panel {
+            display: none;
+            height: 100%;
+            flex-direction: column;
+        }
+
+        .content-panel.active {
+            display: flex;
+        }
+
+        .panel-header {
+            background: var(--console-surface);
+            border-bottom: 1px solid var(--console-border);
+            padding: 15px 25px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+
+        .panel-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--console-accent);
+            margin: 0;
+        }
+
+        .panel-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .panel-body {
+            flex: 1;
+            padding: 20px 25px;
+            overflow-y: auto;
+        }
+
+        /* Metrics Grid */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .metric-card {
+            background: var(--console-surface);
+            border: 1px solid var(--console-border);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .metric-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: var(--console-accent);
+            margin: 0.5rem 0;
+        }
+
+        .metric-label {
+            color: var(--console-text-muted);
+            font-size: 0.9rem;
+        }
+
+        /* High-contrast metric text */
+        .metric-contrast {
+            color: var(--console-text);
+            font-weight: 600;
+        }
+
+        /* Terminal Styles */
+        .terminal-window {
+            background: var(--terminal-bg);
+            border: 1px solid var(--console-border);
+            border-radius: 8px;
+            padding: 16px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            color: var(--terminal-text);
+            /* Fill available space */
+            flex: 1 1 auto;
+            min-height: 0; /* allow flex child to shrink within container */
+            overflow-y: auto;
+        }
+
+        .terminal-line {
+            margin-bottom: 5px;
+            line-height: 1.4;
+        }
+
+        .terminal-prompt {
+            color: var(--console-accent);
+            font-weight: bold;
+        }
+
+        .terminal-input-line {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            margin-top: 10px;
+            border-top: 1px solid var(--console-border);
+            padding-top: 12px;
+        }
+
+        .terminal-input {
+            background: transparent;
+            border: 1px solid var(--console-border);
+            color: var(--terminal-text);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            flex: 1;
+            outline: none;
+            border-radius: 6px;
+            padding: 8px 10px;
+            line-height: 1.4;
+            min-height: 28px;
+            max-height: 40vh;
+            overflow-y: auto;
+        }
+
+        /* Log Styles */
+        .log-entry {
+            padding: 8px 12px;
+            margin-bottom: 5px;
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            border-left: 3px solid transparent;
+        }
+
+        .log-entry.info {
+            background: rgba(88, 166, 255, 0.1);
+            border-left-color: var(--console-info);
+        }
+
+        .log-entry.warning {
+            background: rgba(210, 153, 34, 0.1);
+            border-left-color: #d29922;
+        }
+
+        .log-entry.error {
+            background: rgba(248, 81, 73, 0.1);
+            border-left-color: var(--console-warning);
+        }
+
+        .log-timestamp {
+            color: var(--console-text-muted);
+            margin-right: 10px;
+        }
+
+        /* API Scanner Styles */
+        .endpoint-item {
+            background: var(--console-surface);
+            border: 1px solid var(--console-border);
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 10px;
+        }
+
+        .endpoint-method {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+
+        .method-get { background: var(--console-info); color: #000; }
+        .method-post { background: var(--console-success); color: #000; }
+        .method-put { background: #f39c12; color: #000; }
+        .method-delete { background: var(--console-warning); color: #000; }
+
+        /* System Monitor Styles */
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: var(--console-border);
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 8px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            transition: width 0.3s ease;
+        }
+
+        .progress-fill.success { background: var(--console-success); }
+        .progress-fill.warning { background: #f39c12; }
+        .progress-fill.danger { background: var(--console-warning); }
+
+        /* Tables (process list) */
+        .con5013-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: var(--console-surface);
+            border: 1px solid var(--console-border);
+        }
+        .con5013-table th, .con5013-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--console-border);
+            color: var(--console-text);
+            font-size: 14px;
+        }
+        .con5013-table th {
+            background: rgba(255,255,255,0.03);
+            text-align: left;
+            font-weight: 600;
+        }
+        .con5013-table tr:hover {
+            background: rgba(255,255,255,0.03);
+        }
+
+        /* Status Indicators */
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-indicator.online { background: var(--console-success); }
+        .status-indicator.offline { background: var(--console-warning); }
+        .status-indicator.error { background: var(--console-error); }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .console-sidebar {
+                width: 180px;
+            }
+            
+            .metrics-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="console-container">
+        <!-- Header -->
+        <div class="console-header">
+            <div class="console-title">
+                
+                Con5013 Console
+            </div>
+            <div class="console-controls">
+                <button class="console-btn" onclick="refreshData()">
+                    Refresh
+                </button>
+                <button class="console-btn" onclick="clearAll()">
+                    Clear
+                </button>
+                <button class="console-btn" onclick="toggleFullscreen()">
+                    Fullscreen
+                </button>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="console-main">
+            <!-- Sidebar -->
+            <div class="console-sidebar">
+                <nav class="sidebar-nav">
+                    <button class="nav-item active" data-panel="overview">
+                        Overview
+                    </button>
+                    <button class="nav-item" data-panel="logs">
+                        Logs
+                    </button>
+                    <button class="nav-item" data-panel="terminal">
+                        Terminal
+                    </button>
+                    <button class="nav-item" data-panel="api">
+                        API Scanner
+                    </button>
+                    <button class="nav-item" data-panel="system">
+                        System Monitor
+                    </button>
+                </nav>
+            </div>
+
+            <!-- Content Area -->
+            <div class="console-content">
+                <!-- Overview Panel -->
+                <div class="content-panel active" id="overview-panel">
+                    <div class="panel-header">
+                        <h2 class="panel-title">
+                            System Overview
+                        </h2>
+                    </div>
+                    <div class="panel-body">
+                        <div class="metrics-grid">
+                            <div class="metric-card">
+                                <div class="metric-value" id="uptime-value">2d 14h 32m</div>
+                                <div class="metric-label">Uptime</div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-value" id="routes-value">--</div>
+                                <div class="metric-label">Routes</div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-value" id="errors-value">--</div>
+                                <div class="metric-label">Errors (last 5m)</div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-value" id="memory-value">156.7 MB</div>
+                                <div class="metric-label">Memory Usage</div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h4>System Status</h4>
+                                <div id="system-status">
+                                    <div><span id="status-flask" class="status-indicator offline"></span>Flask Application</div>
+                                    <div><span id="status-con5013" class="status-indicator offline"></span>Con5013 Console</div>
+                                    <div><span id="status-log" class="status-indicator offline"></span>Log Monitor</div>
+                                    <div><span id="status-terminal" class="status-indicator offline"></span>Terminal Engine</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <h4>Recent Activity</h4>
+                                <div id="recent-activity">
+                                    <div class="log-entry info">
+                                        <span class="log-timestamp">Just now</span> - Console initialized
+                                    </div>
+                                    <div class="log-entry info">
+                                        <span class="log-timestamp">2 min ago</span> - System monitor started
+                                    </div>
+                                    <div class="log-entry warning">
+                                        <span class="log-timestamp">5 min ago</span> - High memory usage detected
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Logs Panel -->
+                <div class="content-panel" id="logs-panel">
+                    <div class="panel-header">
+                        <h2 class="panel-title">
+                            Application Logs
+                        </h2>
+                        <div class="panel-controls">
+                            <label for="log-source" class="me-2" style="color: var(--console-text-muted);">Source</label>
+                            <select id="log-source" class="console-btn" style="padding: 6px 10px;">
+                                <option value="flask">flask</option>
+                            </select>
+                            <label class="console-btn ms-3 me-1" style="display:flex; align-items:center; gap:8px; margin:0;">
+                                <input type="checkbox" id="log-autorefresh" checked style="margin:0; vertical-align: middle;"> 
+                                <span style="line-height:1;">Auto</span>
+                            </label>
+                            <button class="console-btn" id="logs-refresh-btn">
+                                Refresh
+                            </button>
+                            <button class="console-btn" id="logs-order-btn" title="Toggle log order">
+                                Newest First
+                            </button>
+                            <button class="console-btn" id="logs-clear-btn">
+                                Clear
+                            </button>
+                            <button class="console-btn" id="logs-export-btn">
+                                Export
+                            </button>
+                        </div>
+                    </div>
+                    <div class="panel-body">
+                        <div id="logs-container"></div>
+                    </div>
+                </div>
+
+                <!-- Terminal Panel -->
+                <div class="content-panel" id="terminal-panel">
+                    <div class="panel-header">
+                        <h2 class="panel-title">
+                            Interactive Terminal
+                        </h2>
+                        <div class="panel-controls">
+                            <button class="console-btn" onclick="clearTerminal()">
+                                Clear
+                            </button>
+                            <button class="console-btn" onclick="newTerminalSession()">
+                                New Session
+                            </button>
+                        </div>
+                    </div>
+                    <div class="panel-body" style="display:flex; flex-direction:column;">
+                        <div class="terminal-window" id="terminal-output"></div>
+                        <div class="terminal-input-line">
+                            <span class="terminal-prompt">con5013@flask:~$</span>
+                                <textarea id="terminal-input" class="terminal-input" placeholder="Enter command (Shift+Enter for newline)" rows="1"></textarea>
+                        </div>
+
+                        </div>
+                </div>
+
+                <!-- API Scanner Panel -->
+                <div class="content-panel" id="api-panel">
+                    <div class="panel-header">
+                        <h2 class="panel-title">
+                            API Scanner
+                        </h2>
+                        <div class="panel-controls">
+                            <button class="console-btn" id="api-scan-btn" onclick="scanEndpoints()">
+                                Scan
+                            </button>
+                            <button class="console-btn" id="api-testall-btn" onclick="testAllEndpoints()">
+                                Test All
+                            </button>
+                            <label class="console-btn ms-2" style="display:flex; align-items:center; gap:8px; margin:0;">
+                                <input type="checkbox" id="api-include-con5013" checked style="margin:0;"> 
+                                <span style="line-height:1;">Include Con5013</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="panel-body">
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-3">
+                                <div class="metric-card">
+                                    <div class="metric-value" id="api-total">0</div>
+                                    <div class="metric-label">Endpoints</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="metric-card">
+                                    <div class="metric-value text-success" id="api-ok">0</div>
+                                    <div class="metric-label">OK</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="metric-card">
+                                    <div class="metric-value text-danger" id="api-fail">0</div>
+                                    <div class="metric-label">Failed</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="metric-card">
+                                    <div class="metric-value" id="api-avg">-</div>
+                                    <div class="metric-label">Avg Response</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <h5>Discovered Endpoints</h5>
+                        <div id="endpoints-list"></div>
+                    </div>
+                </div>
+
+                <!-- System Monitor Panel -->
+                <div class="content-panel" id="system-panel">
+                    <div class="panel-header">
+                        <h2 class="panel-title">
+                            System Monitor
+                        </h2>
+                        <div class="panel-controls">
+                            <button class="console-btn" onclick="refreshSystemMetrics()">
+                                Refresh
+                            </button>
+                            <button class="console-btn" onclick="viewCharts()">
+                                Charts
+                            </button>
+                        </div>
+                    </div>
+                    <div class="panel-body">
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="metric-card">
+                                    <h6>CPU Usage</h6>
+                                    <div class="progress-bar">
+                                        <div id="cpu-progress" class="progress-fill success" style="width: 0%"></div>
+                                    </div>
+                                    <small class="metric-contrast" id="cpu-label">--%</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="metric-card">
+                                    <h6>Memory Usage</h6>
+                                    <div class="progress-bar">
+                                        <div id="memory-progress" class="progress-fill warning" style="width: 0%"></div>
+                                    </div>
+                                    <small class="metric-contrast" id="memory-label">--% (-- / --)</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="metric-card">
+                                    <h6>Disk Usage</h6>
+                                    <div class="progress-bar">
+                                        <div id="disk-progress" class="progress-fill success" style="width: 0%"></div>
+                                    </div>
+                                    <small class="metric-contrast" id="disk-label">--% (-- free)</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="metric-card">
+                                    <h6>Network I/O</h6>
+                                    <div class="d-flex justify-content-between">
+                                        <small class="metric-contrast">↓ <span id="net-down-rate">--</span></small>
+                                        <small class="metric-contrast">↑ <span id="net-up-rate">--</span></small>
+                                    </div>
+                                    <div class="d-flex justify-content-between">
+                                        <small class="text-muted">↓ <span id="net-down-total">--</span></small>
+                                        <small class="text-muted">↑ <span id="net-up-total">--</span></small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <h5 class="m-0">Top Processes</h5>
+                                <div class="d-flex align-items-center" style="gap:8px;">
+                                <label style="display:flex; align-items:center; gap:8px; margin:0;">
+                                    <span style="line-height:1; color: var(--console-text-muted);">Sort</span>
+                                    <select id="proc-sort" style="padding:6px 10px; background: var(--console-surface); color: var(--console-text); border: 1px solid var(--console-border); border-radius:6px;">
+                                        <option value="cpu">CPU</option>
+                                        <option value="memory">Memory</option>
+                                    </select>
+                                </label>
+                                <button id="proc-prev" class="console-btn">Prev</button>
+                                <span id="proc-page" class="metric-contrast">Page 1</span>
+                                <button id="proc-next" class="console-btn">Next</button>
+                                </div>
+                            </div>
+                        <div class="table-responsive">
+                            <table class="con5013-table">
+                                <thead>
+                                    <tr>
+                                        <th>PID</th>
+                                        <th>Name</th>
+                                        <th>CPU %</th>
+                                        <th>Memory</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="processes-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Panel switching functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const navItems = document.querySelectorAll('.nav-item');
+            const panels = document.querySelectorAll('.content-panel');
+
+            navItems.forEach(item => {
+                item.addEventListener('click', function() {
+                    const panelId = this.getAttribute('data-panel');
+                    
+                    // Remove active class from all nav items and panels
+                    navItems.forEach(nav => nav.classList.remove('active'));
+                    panels.forEach(panel => panel.classList.remove('active'));
+                    
+                    // Add active class to clicked nav item and corresponding panel
+                    this.classList.add('active');
+                    document.getElementById(panelId + '-panel').classList.add('active');
+                });
+            });
+
+            // Initialize with sample data
+            loadSampleData();
+        });
+
+        // Sample data loading
+        function loadSampleData() {
+            // Update metrics with real-time data simulation
+            setInterval(updateMetrics, 5000);
+        }
+
+        function updateMetrics() {
+            // Simulate changing metrics
+            const uptime = document.getElementById('uptime-value');
+            const requests = document.getElementById('requests-value');
+            const errors = document.getElementById('errors-value');
+            const memory = document.getElementById('memory-value');
+
+            if (uptime) uptime.textContent = '2d 14h ' + (32 + Math.floor(Math.random() * 5)) + 'm';
+            if (requests) requests.textContent = (1247 + Math.floor(Math.random() * 10)).toLocaleString();
+            if (errors) errors.textContent = Math.floor(Math.random() * 5);
+            if (memory) memory.textContent = (156 + Math.floor(Math.random() * 20)) + '.7 MB';
+        }
+
+        // Console functions
+        function refreshData() {
+            console.log('Refreshing all data...');
+            updateMetrics();
+            alert('Data refreshed successfully!');
+        }
+
+        function clearAll() {
+            console.log('Clearing all data...');
+            alert('All data cleared!');
+        }
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+            } else {
+                document.exitFullscreen();
+            }
+        }
+
+        // Logs functions (live data)
+        const CON5013_CONFIG = {{ config | tojson }};
+        const LOGS_API_BASE = `${CON5013_CONFIG.CON5013_URL_PREFIX}`;
+        const logsContainerEl = document.getElementById('logs-container');
+        const logSourceSel = document.getElementById('log-source');
+        const logAutoChk = document.getElementById('log-autorefresh');
+        const logsRefreshBtn = document.getElementById('logs-refresh-btn');
+        const logsClearBtn = document.getElementById('logs-clear-btn');
+        const logsExportBtn = document.getElementById('logs-export-btn');
+        const logsOrderBtn = document.getElementById('logs-order-btn');
+        let logsTimer = null;
+        let logOrder = 'desc'; // 'desc' = newest first; 'asc' = oldest first
+
+        function levelClass(level) {
+            const L = (level || 'INFO').toUpperCase();
+            if (L === 'ERROR' || L === 'CRITICAL') return {cls:'error', badge:'bg-danger'};
+            if (L === 'WARNING' || L === 'WARN') return {cls:'warning', badge:'bg-warning'};
+            if (L === 'DEBUG') return {cls:'info', badge:'bg-primary'};
+            return {cls:'info', badge:'bg-primary'};
+        }
+
+        function renderLogs(list) {
+            if (!Array.isArray(list)) return;
+            const items = logOrder === 'asc' ? [...list].reverse() : list;
+            const html = items.map(item => {
+                const ts = item.timestamp ? new Date(item.timestamp * 1000).toLocaleTimeString() : '';
+                const L = levelClass(item.level);
+                const msg = (item.message || '').toString().replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                const lvl = (item.level || 'INFO').toUpperCase();
+                return `
+                    <div class="log-entry ${L.cls}">
+                        <span class="log-timestamp">${ts}</span>
+                        <span class="badge ${L.badge} me-2">${lvl}</span>
+                        <span>${msg}</span>
+                    </div>
+                `;
+            }).join('');
+            logsContainerEl.innerHTML = html;
+            logsContainerEl.scrollTop = logsContainerEl.scrollHeight;
+        }
+
+        async function loadLogSources() {
+            try {
+                const r = await fetch(`${LOGS_API_BASE}/api/logs/sources`);
+                const d = await r.json();
+                if (d.status === 'success' && Array.isArray(d.sources)) {
+                    logSourceSel.innerHTML = '';
+                    d.sources.forEach(s => {
+                        const opt = document.createElement('option');
+                        opt.value = s; opt.textContent = s; logSourceSel.appendChild(opt);
+                    });
+                    if (d.sources.includes('flask')) logSourceSel.value = 'flask';
+                }
+            } catch (e) { console.error('Failed to load log sources', e); }
+        }
+
+        async function refreshLogs() {
+            try {
+                const src = encodeURIComponent(logSourceSel.value || 'flask');
+                const r = await fetch(`${LOGS_API_BASE}/api/logs?source=${src}&limit=500`);
+                const d = await r.json();
+                if (d.status === 'success') renderLogs(d.logs || []);
+            } catch (e) { console.error('Failed to refresh logs', e); }
+        }
+
+        function setLogsAuto(enabled) {
+            if (logsTimer) { clearInterval(logsTimer); logsTimer = null; }
+            if (enabled) {
+                logsTimer = setInterval(() => {
+                    const panel = document.getElementById('logs-panel');
+                    if (panel && panel.classList.contains('active')) refreshLogs();
+                }, 3000);
+            }
+        }
+
+        // Wire up controls
+        logSourceSel.addEventListener('change', refreshLogs);
+        logsRefreshBtn.addEventListener('click', refreshLogs);
+        logsOrderBtn.addEventListener('click', () => {
+            logOrder = logOrder === 'desc' ? 'asc' : 'desc';
+            // Update button label/icon
+            if (logOrder === 'desc') {
+                logsOrderBtn.innerHTML = 'Newest First';
+            } else {
+                logsOrderBtn.innerHTML = 'Oldest First';
+            }
+            // Re-render current view with new order
+            refreshLogs();
+        });
+        logsClearBtn.addEventListener('click', () => { logsContainerEl.innerHTML = '<div class="text-muted">Logs cleared</div>'; });
+        logsExportBtn.addEventListener('click', () => {
+            const blob = new Blob([logsContainerEl.innerText], {type: 'text/plain'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = `logs_${logSourceSel.value}.txt`; a.click(); URL.revokeObjectURL(url);
+        });
+        logAutoChk.addEventListener('change', (e) => setLogsAuto(e.target.checked));
+
+        // Initialize on load
+        loadLogSources().then(refreshLogs);
+        setLogsAuto(true);
+
+        // Sidebar nav switching
+        document.querySelectorAll('.nav-item').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const panelId = btn.getAttribute('data-panel');
+                // Toggle active on sidebar
+                document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                // Toggle active on panels
+                document.querySelectorAll('.content-panel').forEach(p => p.classList.remove('active'));
+                const panelEl = document.getElementById(`${panelId}-panel`);
+                if (panelEl) panelEl.classList.add('active');
+                if (panelId === 'logs') refreshLogs();
+                if (panelId === 'system') refreshSystemMetrics();
+                if (panelId === 'overview') refreshOverview();
+            });
+        });
+
+        // Terminal functions (backend-powered)
+        const TERM_API_BASE = LOGS_API_BASE; // same prefix /con5013
+        const termOutEl = document.getElementById('terminal-output');
+        const termInEl = document.getElementById('terminal-input');
+        let termHistory = [];
+        let termIdx = -1;
+
+        function appendTermLine(html, cls='') {
+            const div = document.createElement('div');
+            div.className = 'terminal-line';
+            if (cls) div.classList.add(cls);
+            div.innerHTML = html;
+            termOutEl.appendChild(div);
+            termOutEl.scrollTop = termOutEl.scrollHeight;
+        }
+
+        function appendPrompt(cmd='') {
+            appendTermLine(`<span class="terminal-prompt">con5013@flask:~$</span><span style="margin-left:10px; white-space:pre-wrap;">${escapeHtml(cmd)}</span>`);
+        }
+
+        function escapeHtml(text) {
+            const d = document.createElement('div'); d.textContent = text; return d.innerHTML;
+        }
+
+        async function execTerminal(cmd) {
+            if (!cmd.trim()) return;
+            appendPrompt(cmd);
+            try {
+                const res = await fetch(`${TERM_API_BASE}/api/terminal/execute`, {
+                    method: 'POST', headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({command: cmd})
+                });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    const result = data.result || {};
+                    if (result.type === 'clear') {
+                        termOutEl.innerHTML = '';
+                    } else {
+                        const out = result.output || '';
+                        const cls = result.type === 'error' ? 'text-danger' : (result.type === 'warning' ? 'text-warning' : '');
+                        const html = `<div style="white-space:pre-wrap;color:#ccc;">${escapeHtml(out)}</div>`;
+                        appendTermLine(html, cls);
+                    }
+                } else {
+                    appendTermLine(`<span style='color:#ff6b6b;'>Error: ${escapeHtml(data.message||'Unknown')}</span>`);
+                }
+            } catch (e) {
+                appendTermLine(`<span style='color:#ff6b6b;'>Network error: ${escapeHtml(String(e))}</span>`);
+            }
+        }
+
+        function clearTerminal() {
+            termOutEl.innerHTML = '';
+        }
+
+        function newTerminalSession() {
+            termOutEl.innerHTML = '';
+            termHistory = [];
+            termIdx = -1;
+            appendTermLine('<span style="color:#9f9;">New terminal session started.</span>');
+        }
+
+        // API Scanner functions (wired to backend)
+        function scanEndpoints() { loadEndpoints(); }
+        function testAllEndpoints() { testAllEndpointsUI(); }
+        function testEndpoint(method, path) { uiTestEndpoint(method, path); }
+
+        // System Monitor functions
+        // Track previous network counters to compute rates
+        let prevNet = { downBytes: null, upBytes: null, ts: null };
+
+        async function refreshSystemMetrics() {
+            try {
+                const r = await fetch(`${LOGS_API_BASE}/api/system/stats`);
+                const d = await r.json();
+                if (d.status !== 'success') return;
+                const s = d.stats || {};
+                // CPU
+                if (s.cpu) {
+                    const cpu = Math.round(s.cpu.usage_percent || 0);
+                    const el = document.getElementById('cpu-progress');
+                    if (el) {
+                        el.style.width = `${cpu}%`;
+                        el.className = 'progress-fill';
+                        if (cpu > 80) el.classList.add('danger');
+                        else if (cpu > 60) el.classList.add('warning');
+                        else el.classList.add('success');
+                    }
+                    const lbl = document.getElementById('cpu-label');
+                    if (lbl) lbl.textContent = `${cpu}%`;
+                }
+                // Memory
+                if (s.memory && s.memory.virtual) {
+                    const mem = Math.round(s.memory.virtual.percent || 0);
+                    const el = document.getElementById('memory-progress');
+                    if (el) {
+                        el.style.width = `${mem}%`;
+                        el.className = 'progress-fill';
+                        if (mem > 80) el.classList.add('danger');
+                        else if (mem > 60) el.classList.add('warning');
+                        else el.classList.add('success');
+                    }
+                    const lbl = document.getElementById('memory-label');
+                    if (lbl) lbl.textContent = `${mem}% (${s.memory.virtual.used_gb}GB / ${s.memory.virtual.total_gb}GB)`;
+                }
+                // Disk
+                if (s.disk && s.disk.usage) {
+                    const dsk = Math.round(s.disk.usage.percent || 0);
+                    const el = document.getElementById('disk-progress');
+                    if (el) {
+                        el.style.width = `${dsk}%`;
+                        el.className = 'progress-fill';
+                        if (dsk > 90) el.classList.add('danger');
+                        else if (dsk > 75) el.classList.add('warning');
+                        else el.classList.add('success');
+                    }
+                    const lbl = document.getElementById('disk-label');
+                    if (lbl) lbl.textContent = `${dsk}% (${s.disk.usage.free_gb}GB free)`;
+                }
+                // Network: show rate (per second) and totals
+                if (s.network && s.network.io) {
+                    const now = Date.now() / 1000;
+                    const downBytes = s.network.io.bytes_recv || 0;
+                    const upBytes = s.network.io.bytes_sent || 0;
+                    let downRate = null, upRate = null;
+                    if (prevNet.downBytes != null && prevNet.upBytes != null && prevNet.ts != null) {
+                        const dt = Math.max(0.001, now - prevNet.ts);
+                        downRate = (downBytes - prevNet.downBytes) / dt;
+                        upRate = (upBytes - prevNet.upBytes) / dt;
+                    }
+                    prevNet = { downBytes, upBytes, ts: now };
+
+                    function fmtRate(bps){
+                        if (bps == null) return '--';
+                        const kb = bps/1024, mb = kb/1024;
+                        if (mb >= 1) return `${mb.toFixed(1)} MB/s`;
+                        if (kb >= 1) return `${kb.toFixed(0)} KB/s`;
+                        return `${bps.toFixed(0)} B/s`;
+                    }
+                    function fmtTotal(bytes){
+                        const mb = bytes/(1024*1024), gb = mb/1024;
+                        if (gb >= 1) return `${gb.toFixed(1)} GB`;
+                        return `${mb.toFixed(1)} MB`;
+                    }
+
+                    const dnRateEl = document.getElementById('net-down-rate');
+                    const upRateEl = document.getElementById('net-up-rate');
+                    const dnTotEl = document.getElementById('net-down-total');
+                    const upTotEl = document.getElementById('net-up-total');
+                    if (dnRateEl) dnRateEl.textContent = fmtRate(downRate);
+                    if (upRateEl) upRateEl.textContent = fmtRate(upRate);
+                    if (dnTotEl) dnTotEl.textContent = fmtTotal(downBytes);
+                    if (upTotEl) upTotEl.textContent = fmtTotal(upBytes);
+                }
+            } catch (e) { /* ignore */ }
+        }
+
+        function viewCharts() {
+            // Placeholder for future charts integration
+            appendTermLine('<span style="color:#9f9;">Charts view coming soon.</span>');
+        }
+
+        // Periodic system refresh when tab is active
+        setInterval(() => {
+            const panel = document.getElementById('system-panel');
+            if (panel && panel.classList.contains('active')) {
+                refreshSystemMetrics();
+            }
+        }, 5000);
+
+        // Overview refresh
+        function setStatus(id, on){
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.classList.remove('online','offline','error');
+            el.classList.add(on ? 'online' : 'offline');
+        }
+
+        async function refreshOverview(){
+            try{
+                // Stats for uptime and memory and routes
+                const sres = await fetch(`${LOGS_API_BASE}/api/system/stats`);
+                const sd = await sres.json();
+                if (sd.status === 'success'){
+                    const stats = sd.stats || {};
+                    const app = stats.application || {};
+                    const upEl = document.getElementById('uptime-value');
+                    if (upEl && app.uptime_formatted) upEl.textContent = app.uptime_formatted;
+                    const routesEl = document.getElementById('routes-value');
+                    if (routesEl && typeof app.routes_count === 'number') routesEl.textContent = app.routes_count;
+                    const memEl = document.getElementById('memory-value');
+                    if (memEl && stats.memory && stats.memory.virtual){
+                        memEl.textContent = `${stats.memory.virtual.used_gb} GB / ${stats.memory.virtual.total_gb} GB`;
+                    }
+                }
+                // Health for components
+                const hres = await fetch(`${LOGS_API_BASE}/api/system/health`);
+                const hd = await hres.json();
+                if (hd.status === 'success'){
+                    const comp = (hd.health && hd.health.components) || {};
+                    setStatus('status-flask', true);
+                    setStatus('status-con5013', true);
+                    setStatus('status-log', !!comp.log_monitor);
+                    setStatus('status-terminal', !!comp.terminal_engine);
+                }
+                // Errors in last 5 minutes from flask source
+                const since = (Date.now()/1000) - 300;
+                const lres = await fetch(`${LOGS_API_BASE}/api/logs?source=flask&level=ERROR&since=${since}&limit=500`);
+                const ld = await lres.json();
+                if (ld.status === 'success'){
+                    const errEl = document.getElementById('errors-value');
+                    if (errEl) errEl.textContent = ld.total || 0;
+                }
+                // Recent activity: last 5 logs (any level)
+                const rres = await fetch(`${LOGS_API_BASE}/api/logs?source=flask&limit=5`);
+                const rd = await rres.json();
+                if (rd.status === 'success'){
+                    const act = document.getElementById('recent-activity');
+                    if (act){
+                        act.innerHTML = (rd.logs||[]).map(log => {
+                            const ts = log.timestamp ? new Date(log.timestamp*1000).toLocaleTimeString() : '';
+                            const lvl = (log.level||'INFO').toUpperCase();
+                            const cls = lvl==='ERROR'?'warning':'info';
+                            return `<div class="log-entry ${cls}"><span class="log-timestamp">${ts}</span> - ${escapeHtml(log.message||'')}</div>`;
+                        }).join('');
+                    }
+                }
+            }catch(e){ /* ignore */ }
+        }
+
+        // Initial refresh on load
+        refreshOverview();
+
+        // Processes controls
+        let procPage = 1;
+        const procPageSize = 10;
+        let procSort = 'cpu';
+
+        function fmtBytes(n){
+            if (!n) return '0 B';
+            const units = ['B','KB','MB','GB','TB'];
+            let i=0; let v=n;
+            while (v>=1024 && i<units.length-1){ v/=1024; i++; }
+            return `${v.toFixed(i?1:0)} ${units[i]}`;
+        }
+
+        async function refreshProcesses(){
+            try{
+                const r = await fetch(`${LOGS_API_BASE}/api/system/processes?sort_by=${procSort}&page=${procPage}&page_size=${procPageSize}`);
+                const d = await r.json();
+                if (d.status !== 'success') return;
+                const data = d.data || {};
+                const list = data.processes || [];
+                const tbody = document.getElementById('processes-body');
+                if (!tbody) return;
+                tbody.innerHTML = list.map(p => `
+                    <tr>
+                        <td>${p.pid}</td>
+                        <td>${p.name || ''}</td>
+                        <td>${(p.cpu_percent||0).toFixed(1)}</td>
+                        <td>${fmtBytes(p.memory_bytes||0)}</td>
+                        <td><span class="badge ${p.status==='running'?'bg-success':'bg-secondary'}">${p.status||''}</span></td>
+                    </tr>
+                `).join('');
+                const pg = document.getElementById('proc-page');
+                if (pg) pg.textContent = `Page ${data.page}`;
+            }catch(e){ /* ignore */ }
+        }
+
+        const sortSel = document.getElementById('proc-sort');
+        const prevBtn = document.getElementById('proc-prev');
+        const nextBtn = document.getElementById('proc-next');
+        sortSel && sortSel.addEventListener('change', ()=>{ procSort = sortSel.value; procPage=1; refreshProcesses(); });
+        prevBtn && prevBtn.addEventListener('click', ()=>{ if (procPage>1){ procPage--; refreshProcesses(); } });
+        nextBtn && nextBtn.addEventListener('click', ()=>{ procPage++; refreshProcesses(); });
+
+        // Also refresh processes when opening the System tab
+        document.querySelectorAll('.nav-item').forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (btn.getAttribute('data-panel') === 'system') refreshProcesses();
+            });
+        });
+
+        // Auto-resize terminal input like a modern chat box
+        function autoResizeTerm() {
+            termInEl.style.height = 'auto';
+            const max = parseInt(getComputedStyle(termInEl).maxHeight) || 400;
+            termInEl.style.height = Math.min(termInEl.scrollHeight, max) + 'px';
+        }
+        autoResizeTerm();
+        termInEl.addEventListener('input', autoResizeTerm);
+
+        // Terminal input handling
+        termInEl.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                const cmd = termInEl.value;
+                termInEl.value = '';
+                autoResizeTerm();
+                termHistory.push(cmd); termIdx = termHistory.length;
+                execTerminal(cmd);
+            } else if (e.key === 'ArrowUp') {
+                if (termIdx > 0) { termIdx -= 1; termInEl.value = termHistory[termIdx] || ''; e.preventDefault(); }
+            } else if (e.key === 'ArrowDown') {
+                if (termIdx < termHistory.length) { termIdx += 1; termInEl.value = termHistory[termIdx] || ''; e.preventDefault(); }
+            }
+        });
+
+        // API Scanner logic
+        const API_BASE = CON5013_CONFIG.CON5013_URL_PREFIX;
+        const apiScanBtn = document.getElementById('api-scan-btn');
+        const apiTestAllBtn = document.getElementById('api-testall-btn');
+        const endpointsList = document.getElementById('endpoints-list');
+        const apiTotalEl = document.getElementById('api-total');
+        const apiOkEl = document.getElementById('api-ok');
+        const apiFailEl = document.getElementById('api-fail');
+        const apiAvgEl = document.getElementById('api-avg');
+
+        async function loadEndpoints() {
+            try {
+                const includeCon = document.getElementById('api-include-con5013')?.checked;
+                const r = await fetch(`${API_BASE}/api/scanner/discover?include_con5013=${includeCon ? 'true' : 'false'}`);
+                const d = await r.json();
+                if (d.status === 'success') {
+                    const eps = d.endpoints || [];
+                    renderEndpoints(eps);
+                    apiTotalEl && (apiTotalEl.textContent = eps.length);
+                    // Immediately test all to populate metrics and per-endpoint status
+                    await testAllEndpointsUI();
+                }
+            } catch (e) { console.error('Failed to discover endpoints', e); }
+        }
+
+        function slugify(s){ return String(s||'').replace(/[^a-zA-Z0-9]/g,'_'); }
+
+        function renderEndpoints(endpoints) {
+            if (!endpointsList) return;
+            if (!Array.isArray(endpoints) || endpoints.length === 0) {
+                endpointsList.innerHTML = '<div class="text-muted">No endpoints found</div>';
+                return;
+            }
+            const itemHTML = (ep) => {
+                const methods = (ep.methods || []).map(m => `<span class="endpoint-method method-${m.toLowerCase()}">${m}</span>`).join(' ');
+                const desc = ep.description ? `<small class="text-muted ms-2">${escapeHtml(ep.description)}</small>` : '';
+                const rule = escapeHtml(ep.rule || ep.url || '');
+                const mlist = ep.methods || ['GET'];
+                const displayMethod = mlist.includes('GET') ? 'GET' : mlist[0];
+                const idBase = `ep-${slugify(ep.rule || ep.url || '')}`;
+                const protectedBadge = ep.protected ? '<span class="badge bg-secondary me-2">Protected</span>' : '';
+                const testButtons = ep.protected
+                    ? ''
+                    : `<button class="btn btn-sm btn-outline-secondary" onclick="copyHttpToTerminal('${displayMethod}', '${rule}')">Copy</button>
+                       <button class="btn btn-sm btn-outline-primary" onclick="uiTestEndpoint('${displayMethod}', '${rule}')">Test</button>`;
+                return `
+                <div class="endpoint-item">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            ${methods}
+                            <code id="${idBase}-path" class="text-warning">${rule}</code>
+                            ${desc}
+                        </div>
+                        <div>
+                            ${protectedBadge}<span id="${idBase}-status" class="badge bg-warning text-dark me-2">Not tested</span>
+                            ${testButtons}
+                        </div>
+                    </div>
+                </div>`
+            };
+            endpointsList.innerHTML = endpoints.map(itemHTML).join('');
+        }
+
+        async function uiTestEndpoint(method, path) {
+            try {
+                const r = await fetch(`${API_BASE}/api/scanner/test`, {
+                    method:'POST', headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({ endpoint: path, method })
+                });
+                const d = await r.json();
+                const res = d.result || d;
+                if (d.status === 'success' || res.status) {
+                    const msg = `HTTP ${method} ${path}\nStatus: ${res.status_code} (${res.status})\nTime: ${res.response_time_ms} ms`;
+                    appendTermLine(`<div style=\"color:#9f9; white-space:pre-wrap;\">${escapeHtml(msg)}</div>`);
+                    // Update the badge on this row
+                    applyResultToList({ ...res, method, endpoint: path });
+                    // Refresh aggregate metrics to stay accurate
+                    await testAllEndpointsUI();
+                } else {
+                    appendTermLine(`<span style='color:#ff6b6b;'>Test failed: ${escapeHtml(d.message||'Unknown')}</span>`);
+                }
+            } catch (e) {
+                appendTermLine(`<span style='color:#ff6b6b;'>Test error: ${escapeHtml(String(e))}</span>`);
+            }
+        }
+        window.uiTestEndpoint = uiTestEndpoint;
+
+        function copyHttpToTerminal(method, path) {
+            const cmd = `http ${method} ${path}`;
+            if (termInEl) { termInEl.value = cmd; termInEl.focus(); autoResizeTerm(); }
+        }
+        window.copyHttpToTerminal = copyHttpToTerminal;
+
+        function applyResultToList(result){
+            let endpoint = result.endpoint || result.url || '';
+            const candidates = [];
+            const addCandidate = (s) => { if (s) candidates.push(`ep-${slugify(s)}`); };
+            addCandidate(endpoint);
+            // Try trimming or adding trailing slash for matching
+            if (endpoint.endsWith('/')) addCandidate(endpoint.slice(0, -1));
+            else addCandidate(endpoint + '/');
+            // Also try URL if provided
+            if (result.url && result.url !== endpoint) {
+                addCandidate(result.url);
+            }
+            let el = null, pathEl = null, id = null;
+            for (const cid of candidates) {
+                const statusEl = document.getElementById(`${cid}-status`);
+                if (statusEl) { el = statusEl; id = cid; pathEl = document.getElementById(`${cid}-path`); break; }
+            }
+            if (!el) return;
+            el.textContent = `${result.status_code || ''} ${result.status || ''}`.trim();
+            el.className = 'badge me-2 ' + ((result.status === 'success') ? 'bg-success' : (result.status==='timeout' || result.status==='connection_error') ? 'bg-warning text-dark' : 'bg-danger');
+            el.title = `Time: ${Math.round(result.response_time_ms||0)} ms`;
+            // Also color the endpoint path text to reflect status
+            // pathEl was resolved alongside el
+            if (pathEl) {
+                let cls = 'text-danger';
+                if (result.status === 'success') cls = 'text-success';
+                else if (result.status === 'timeout' || result.status === 'connection_error') cls = 'text-warning';
+                pathEl.className = cls;
+            }
+        }
+
+        async function testAllEndpointsUI() {
+            try {
+                const includeCon = document.getElementById('api-include-con5013')?.checked;
+                const r = await fetch(`${API_BASE}/api/scanner/test-all?include_con5013=${includeCon ? 'true' : 'false'}`, { method:'POST' });
+                const d = await r.json();
+                if (d.status === 'success') {
+                    const summary = d.results || d; // blueprint nests under 'results'
+                    const ok = summary.successful_tests || 0;
+                    const fail = summary.failed_tests || 0;
+                    const avg = Math.round(summary.average_response_time || 0);
+                    apiOkEl && (apiOkEl.textContent = ok);
+                    apiFailEl && (apiFailEl.textContent = fail);
+                    apiAvgEl && (apiAvgEl.textContent = `${avg}ms`);
+                    (summary.results || []).forEach(applyResultToList);
+                }
+            } catch (e) { console.error('Failed to test all', e); }
+        }
+
+        apiScanBtn && apiScanBtn.addEventListener('click', loadEndpoints);
+        document.getElementById('api-include-con5013')?.addEventListener('change', loadEndpoints);
+        apiTestAllBtn && apiTestAllBtn.addEventListener('click', testAllEndpointsUI);
+        // Load endpoints when switching to API tab
+        document.querySelectorAll('.nav-item').forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (btn.getAttribute('data-panel') === 'api') { loadEndpoints(); }
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+include README.md
+include LICENSE
+include requirements.txt
+recursive-include con5013/static *
+recursive-include con5013/templates *
+recursive-include docs *
+recursive-include examples *
+global-exclude __pycache__
+global-exclude *.py[co]
+
