@@ -8,6 +8,7 @@ import time
 from collections import deque
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 
 from flask import Flask, jsonify, render_template_string, request
 
@@ -404,39 +405,295 @@ console.add_system_box(
 # ----------------------------------------------------------------------
 if console.terminal_engine:
     def crawl4ai_run_command(args: List[str]) -> Dict[str, Any]:
-        """Queue a Crawl4AI job. Usage: crawl4ai-run [URL] [--profile name] [--fail]"""
+        """Run Crawl4AI from the terminal.
 
-        url = "https://example.com/articles"
+        Usage: crawl4ai-run [URL] [--mode markdown|clean-html|links] [--link-limit N]
+                             [--simulate] [--profile name] [--fail]
+        """
+
+        default_url = "https://example.com/articles"
+        url = None
         profile = "default"
         fail = False
-        skip_next = False
-        for index, arg in enumerate(args):
-            if skip_next:
-                skip_next = False
-                continue
+        simulate = False
+        mode = "markdown"
+        mode_explicit = False
+        link_limit = 5
+        messages: List[str] = []
+        unknown_args: List[str] = []
+
+        index = 0
+
+        def _consume_value(option: str) -> Optional[str]:
+            """Advance the index and return the next CLI argument."""
+
+            nonlocal index
+            if index + 1 >= len(args):
+                messages.append(
+                    f"Missing value for {option}; keeping previous setting."
+                )
+                return None
+            index += 1
+            return args[index]
+
+        while index < len(args):
+            arg = args[index]
             if arg in {"--fail", "-f"}:
                 fail = True
+                simulate = True
+            elif arg in {"--simulate"}:
+                simulate = True
             elif arg.startswith("--profile="):
                 profile = arg.split("=", 1)[1] or profile
-            elif arg == "--profile" and index + 1 < len(args):
-                profile = args[index + 1]
-                skip_next = True
-            elif not arg.startswith("-") and url == "https://example.com/articles":
+                simulate = True
+            elif arg == "--profile":
+                value = _consume_value("--profile")
+                if value is not None:
+                    profile = value
+                    simulate = True
+            elif arg.startswith("--mode="):
+                mode = arg.split("=", 1)[1] or mode
+                mode_explicit = True
+            elif arg in {"--mode", "-m"}:
+                value = _consume_value("--mode")
+                if value is not None:
+                    mode = value
+                    mode_explicit = True
+            elif arg.startswith("--link-limit="):
+                value = arg.split("=", 1)[1]
+                try:
+                    link_limit = max(1, int(value))
+                except ValueError:
+                    messages.append(
+                        f"Invalid value '{value}' for --link-limit; using {link_limit}."
+                    )
+            elif arg == "--link-limit":
+                value = _consume_value("--link-limit")
+                if value is not None:
+                    try:
+                        link_limit = max(1, int(value))
+                    except ValueError:
+                        messages.append(
+                            f"Invalid value '{value}' for --link-limit; using {link_limit}."
+                        )
+            elif arg.startswith("-"):
+                unknown_args.append(arg)
+            elif url is None:
                 url = arg
-        job = crawl4ai_simulator.start_job(
-            url, profile=profile, fail=fail, launched_by="terminal"
-        )
-        message = (
-            f"Queued Crawl4AI job #{job['id']} for {job['url']} (profile={profile})"
-        )
-        if fail:
-            message += "\nFailure simulation enabled – watch the Crawl4AI error logs."
-        return {"output": message, "type": "text"}
+            else:
+                messages.append(f"Ignoring extra argument '{arg}'.")
+            index += 1
+
+        if not url:
+            url = default_url
+
+        def _normalize_url(raw: str) -> Optional[str]:
+            candidate = raw.strip()
+            if not candidate:
+                messages.append("No URL provided; using default example crawl.")
+                return default_url
+            parsed = urlparse(candidate)
+            if not parsed.scheme:
+                candidate = f"https://{candidate}"
+                parsed = urlparse(candidate)
+                messages.append(f"Interpreting URL as {candidate}.")
+            if parsed.scheme not in {"http", "https"}:
+                messages.append(
+                    f"Unsupported URL scheme '{parsed.scheme}'. Only http/https are allowed."
+                )
+                return None
+            if not parsed.netloc:
+                messages.append(f"Invalid URL '{raw}'.")
+                return None
+            return candidate
+
+        normalized_url = _normalize_url(url)
+        if not normalized_url:
+            return {
+                "output": "\n".join(messages) or "Unable to interpret the provided URL.",
+                "type": "text",
+            }
+
+        mode_aliases = {
+            "markdown": "markdown",
+            "md": "markdown",
+            "clean-html": "clean-html",
+            "clean": "clean-html",
+            "html": "clean-html",
+            "links": "links",
+            "link": "links",
+        }
+        normalized_mode = mode_aliases.get(mode.lower())
+        if not normalized_mode:
+            valid_modes = ", ".join(sorted(set(mode_aliases.values())))
+            return {
+                "output": (
+                    f"Unknown mode '{mode}'. Supported modes: {valid_modes}."
+                ),
+                "type": "text",
+            }
+
+        fallback_to_simulator = False
+        if not CRAWL4AI_AVAILABLE and not simulate:
+            fallback_to_simulator = True
+            simulate = True
+            messages.append(
+                "crawl4ai package is not installed – using the local simulator instead."
+            )
+
+        if simulate:
+            job = crawl4ai_simulator.start_job(
+                normalized_url, profile=profile, fail=fail, launched_by="terminal"
+            )
+            message_lines = []
+            if fallback_to_simulator and mode_explicit:
+                message_lines.append(
+                    "Real Crawl4AI output modes are unavailable without the package."
+                )
+            message_lines.extend(messages)
+            if unknown_args:
+                message_lines.append(
+                    "Ignored unsupported option(s): " + ", ".join(sorted(unknown_args))
+                )
+            message_lines.append(
+                f"Queued Crawl4AI job #{job['id']} for {job['url']} (profile={profile})"
+            )
+            if fail:
+                message_lines.append(
+                    "Failure simulation enabled – watch the Crawl4AI error logs."
+                )
+            return {"output": "\n".join(filter(None, message_lines)), "type": "text"}
+
+        try:
+            crawler = WebCrawler(always_by_pass_cache=True, verbose=False)
+        except Exception as exc:  # pragma: no cover - optional dependency path
+            logger.exception("Failed to initialize WebCrawler", exc_info=exc)
+            lines = messages + [
+                "Unable to initialize Crawl4AI WebCrawler."
+                " Try installing optional browser dependencies.",
+                f"Error: {exc}",
+            ]
+            return {"output": "\n".join(filter(None, lines)), "type": "text"}
+
+        try:
+            result = crawler.run(
+                normalized_url,
+                warmup=False,
+                verbose=False,
+            )
+        except Exception as exc:  # pragma: no cover - optional dependency path
+            logger.exception("Crawl4AI run failed", exc_info=exc)
+            lines = messages + [
+                f"Crawl4AI failed to crawl {normalized_url}: {exc}",
+            ]
+            return {"output": "\n".join(filter(None, lines)), "type": "text"}
+
+        if result is None or not getattr(result, "success", False):
+            failure_reason = getattr(result, "error_message", None) or "unknown error"
+            lines = messages + [
+                f"Crawl4AI did not return content for {normalized_url}: {failure_reason}"
+            ]
+            return {"output": "\n".join(filter(None, lines)), "type": "text"}
+
+        def _truncate(text: str, limit: int = 4000) -> str:
+            if len(text) <= limit:
+                return text
+            trimmed = text[:limit]
+            return (
+                f"{trimmed}\n… output truncated (remaining {len(text) - limit} characters)."
+            )
+
+        def _format_markdown() -> str:
+            markdown = getattr(result, "markdown", None)
+            if markdown:
+                return _truncate(str(markdown).strip()) or "(Markdown response was empty.)"
+            cleaned_html = getattr(result, "cleaned_html", None) or ""
+            if cleaned_html:
+                return _truncate(cleaned_html)
+            html = getattr(result, "html", "")
+            return _truncate(html) if html else "(No content returned.)"
+
+        def _normalize_links_data(raw_links: Any) -> Dict[str, List[Dict[str, Any]]]:
+            if raw_links is None:
+                return {}
+            if hasattr(raw_links, "model_dump"):
+                raw_links = raw_links.model_dump()
+            normalized: Dict[str, List[Dict[str, Any]]] = {}
+            if isinstance(raw_links, dict):
+                for key, values in raw_links.items():
+                    normalized[key] = []
+                    for item in values or []:
+                        if hasattr(item, "model_dump"):
+                            normalized[key].append(item.model_dump())
+                        elif isinstance(item, dict):
+                            normalized[key].append(item)
+                        else:
+                            normalized[key].append({"text": str(item)})
+            return normalized
+
+        def _format_links() -> str:
+            links_data = _normalize_links_data(getattr(result, "links", None))
+            if not links_data:
+                return "No links were extracted from the page."
+            lines: List[str] = []
+            for category in ("internal", "external"):
+                entries = links_data.get(category) or []
+                if not entries:
+                    continue
+                lines.append(f"{category.capitalize()} links ({len(entries)} total):")
+                for entry in entries[:link_limit]:
+                    href = entry.get("href") or entry.get("url") or "—"
+                    text_value = entry.get("text") or entry.get("title") or href
+                    text_value = (text_value or "").strip() or "(no text)"
+                    lines.append(f"  • {text_value} -> {href}")
+                remaining = len(entries) - link_limit
+                if remaining > 0:
+                    lines.append(f"  … {remaining} more")
+            if not lines:
+                return "No links were extracted from the page."
+            return _truncate("\n".join(lines))
+
+        def _format_clean_html() -> str:
+            cleaned_html = getattr(result, "cleaned_html", None)
+            if cleaned_html:
+                return _truncate(cleaned_html)
+            html = getattr(result, "html", "")
+            return _truncate(html) if html else "(No HTML content returned.)"
+
+        formatter = {
+            "markdown": _format_markdown,
+            "clean-html": _format_clean_html,
+            "links": _format_links,
+        }[normalized_mode]
+
+        header_lines = [
+            f"Crawl4AI {normalized_mode.replace('-', ' ')} output for {normalized_url}",
+        ]
+        title = None
+        metadata = getattr(result, "metadata", None)
+        if isinstance(metadata, dict):
+            title = metadata.get("title") or metadata.get("og:title")
+        if title:
+            header_lines.append(f"Title: {title}")
+        redirected = getattr(result, "redirected_url", None)
+        if redirected and redirected != normalized_url:
+            header_lines.append(f"Redirected to: {redirected}")
+
+        content = formatter()
+        lines = messages + [
+            "Ignored unsupported option(s): " + ", ".join(sorted(unknown_args))
+            if unknown_args
+            else "",
+            "\n".join(header_lines),
+            "",
+            content,
+        ]
+        return {"output": "\n".join(filter(None, lines)), "type": "text"}
 
     console.add_custom_command(
         "crawl4ai-run",
         crawl4ai_run_command,
-        "Queue a Crawl4AI crawl (use --fail to simulate an error)",
+        "Run Crawl4AI for a URL (use --mode for output or --simulate to queue)",
     )
 
     def crawl4ai_jobs_command(args: List[str]) -> Dict[str, Any]:
