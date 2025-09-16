@@ -136,25 +136,28 @@ def create_app() -> Flask:
                             <li>Ship: Nebuchadnezzar</li>
                         </ul>
                     </div>
-                    <div class="col card">
-                        <h3>Quick Links</h3>
-                        <ul>
-                            <li><a href="/con5013/">Open Con5013 Console</a></li>
-                            <li><a href="/con5013/api/info">Console Info API</a></li>
-                            <li><a href="/con5013/api/system/health">System Health</a></li>
-                            <li><a href="/con5013/api/logs?source=matrix">Logs: matrix file</a></li>
-                            <li><a href="/con5013/api/logs?source=flask">Logs: flask stream</a></li>
-                        </ul>
-                    </div>
+                <div class="col card">
+                    <h3>Quick Links</h3>
+                    <ul>
+                        <li><a href="{{ url_for('con5013.console_home') }}">Open Con5013 Console</a></li>
+                        <li><a href="{{ url_for('con5013.api_info') }}">Console Info API</a></li>
+                        <li><a href="{{ url_for('con5013.api_system_health') }}">System Health</a></li>
+                        <li><a href="{{ url_for('con5013.api_logs', source='matrix') }}">Logs: matrix file</a></li>
+                        <li><a href="{{ url_for('con5013.api_logs', source='flask') }}">Logs: flask stream</a></li>
+                    </ul>
                 </div>
-                <p class="muted">Press <strong>Alt + C</strong> to toggle the overlay (if enabled).</p>
             </div>
-            <!-- Con5013 overlay launcher: include once to enable the floating button on this page -->
-            <script src="/con5013/static/js/con5013.js"></script>
+            <p class="muted">Press <strong>{{ hotkey }}</strong> to toggle the overlay (if enabled).</p>
+        </div>
+        <!-- Con5013 overlay launcher: include once to enable the floating button on this page -->
+        <script src="{{ url_for('con5013.static', filename='js/con5013.js') }}"></script>
         </body>
         </html>
         """
-        return render_template_string(html)
+        return render_template_string(
+            html,
+            hotkey=console.config.get('CON5013_HOTKEY', 'Alt + C'),
+        )
 
     @app.route('/generate-logs')
     def generate_logs():

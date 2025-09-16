@@ -107,6 +107,18 @@ def configure_logging(app: Flask) -> None:
     app.logger.addHandler(stream_handler)
     app.logger.setLevel(logging.INFO)
 
+    # Ensure Werkzeug retains a console handler so Flask's startup banner is
+    # still emitted.  The default handler is replaced when we configure the
+    # application logger above, which otherwise suppresses the "Running on"
+    # message and makes the server appear to hang.
+    werkzeug_logger = logging.getLogger("werkzeug")
+    if not any(isinstance(handler, logging.StreamHandler) for handler in werkzeug_logger.handlers):
+        werkzeug_handler = logging.StreamHandler()
+        werkzeug_handler.setFormatter(fmt)
+        werkzeug_handler.setLevel(logging.INFO)
+        werkzeug_logger.addHandler(werkzeug_handler)
+    werkzeug_logger.setLevel(logging.INFO)
+
     for name, path in LOG_FILES.items():
         handler = RotatingFileHandler(path, maxBytes=1_000_000, backupCount=3)
         handler.setFormatter(fmt)
