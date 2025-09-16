@@ -1219,15 +1219,17 @@ class Con5013Console {
 
         const endpointsHTML = endpoints.map(endpoint => {
             const category = endpoint.category || this.categorizeEndpoint(endpoint);
+            const defaultMethod = this.getEndpointDefaultMethod(endpoint.methods);
+            const sanitizedPath = (endpoint.sample_path || endpoint.rule).replace(/'/g, "\'");
             const termBtn = this.features.terminal
-                ? `<button class="con5013-btn secondary" onclick="con5013.runEndpointInTerminal('${(endpoint.sample_path || endpoint.rule).replace(/'/g, "\'")}', '${endpoint.methods[0]}')">Run in Terminal</button>`
+                ? `<button class="con5013-btn secondary" onclick="con5013.runEndpointInTerminal('${sanitizedPath}', '${defaultMethod}')">Run in Terminal</button>`
                 : '';
             const badge = category === 'system'
                 ? '<span class="con5013-badge system">System</span>'
                 : (category === 'excluded' ? '<span class="con5013-badge excluded">Excluded</span>' : '');
             const testControls = endpoint.protected
                 ? '<span class="con5013-endpoint-note">Tests disabled</span>'
-                : `<button class="con5013-btn" onclick="con5013.testEndpoint('${(endpoint.sample_path || endpoint.rule).replace(/'/g, "\'")}', '${endpoint.methods[0]}')">Test</button>${termBtn ? ` ${termBtn}` : ''}`;
+                : `<button class="con5013-btn" onclick="con5013.testEndpoint('${sanitizedPath}', '${defaultMethod}')">Test</button>${termBtn ? ` ${termBtn}` : ''}`;
             return `
             <div class="con5013-endpoint">
                 <div class="con5013-endpoint-info">
@@ -1246,7 +1248,24 @@ class Con5013Console {
 
         container.innerHTML = endpointsHTML;
     }
-    
+
+    getEndpointDefaultMethod(methods = []) {
+        if (!Array.isArray(methods) || methods.length === 0) {
+            return 'GET';
+        }
+
+        const preferredOrder = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'];
+        for (const pref of preferredOrder) {
+            const match = methods.find(method => (method || '').toUpperCase() === pref);
+            if (match) {
+                return match;
+            }
+        }
+
+        const fallback = methods.find(method => (method || '').toUpperCase() !== 'OPTIONS');
+        return fallback || methods[0];
+    }
+
     async testEndpoint(pathOrUrl, method) {
         const statusIndicator = document.querySelector(`#status-${(pathOrUrl || '').replace(/[^a-zA-Z0-9]/g, '')}`);
         if (statusIndicator) {
