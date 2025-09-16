@@ -70,10 +70,13 @@ class TestCon5013(unittest.TestCase):
             # Test logs API
             response = client.get('/con5013/api/logs')
             self.assertIn(response.status_code, [200, 500])  # 500 is OK if no logs configured
-            
+
             # Test system API
-            response = client.get('/con5013/api/system')
-            self.assertIn(response.status_code, [200, 500])
+            stats_response = client.get('/con5013/api/system/stats')
+            self.assertIn(stats_response.status_code, [200, 500])
+
+            health_response = client.get('/con5013/api/system/health')
+            self.assertIn(health_response.status_code, [200, 500])
             
     def test_custom_url_prefix(self):
         """Test custom URL prefix configuration."""
