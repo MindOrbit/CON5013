@@ -1,4 +1,4 @@
-﻿[build-system]
+[build-system]
 requires = [
     "setuptools>=68",
     "wheel"
@@ -78,33 +78,3 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["."]
-
-[tool.setuptools.package-data]
-"con5013" = [
-    "static/css/*.css",
-    "static/js/*.js",
-    "static/assets/*",
-    "templates/*.html"
-]
-
-[tool.pytest.ini_options]
-addopts = "-ra"
-testpaths = [
-    "tests"
-]
-pythonpath = ["."]
-
-[tool.black]
-line-length = 100
-
-[tool.isort]
-profile = "black"
-line_length = 100
-
-[tool.flake8]
-max-line-length = 100
-extend-ignore = ["E203", "W503"]
-
-
-
-
