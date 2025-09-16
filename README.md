@@ -351,6 +351,23 @@ console = Con5013(app, config={
 - Performance graphs and progress bars
 - System information and uptime tracking
 
+#### Metric Toggles
+
+All system metrics (CPU, memory, disk, network, and GPU) are enabled by default so teams always see a complete picture out of the box. When you disable a metric, Con5013 stops collecting it on the backend and removes the corresponding card from the System tab automatically.
+
+```python
+console = Con5013(app, config={
+    'CON5013_ENABLE_SYSTEM_MONITOR': True,
+    'CON5013_MONITOR_CPU': True,      # Toggle CPU card and sampling
+    'CON5013_MONITOR_MEMORY': True,   # Toggle memory card and sampling
+    'CON5013_MONITOR_DISK': True,     # Toggle disk usage card and sampling
+    'CON5013_MONITOR_NETWORK': True,  # Toggle network card and rate calculations
+    'CON5013_MONITOR_GPU': True,      # Toggle GPU card and NVML integration
+})
+```
+
+Setting any of the `CON5013_MONITOR_*` values to `False` (boolean) cleanly disables the related collector, keeps `/api/system/stats` lean, and hides the card from the UI, ensuring the System tab reflects the metrics you care about.
+
 ## 🛠️ Advanced Usage
 
 ### Factory Pattern

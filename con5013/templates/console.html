@@ -377,6 +377,11 @@
     </style>
 </head>
 <body>
+    {% set monitor_cpu = config.get('CON5013_MONITOR_CPU', True) %}
+    {% set monitor_memory = config.get('CON5013_MONITOR_MEMORY', True) %}
+    {% set monitor_disk = config.get('CON5013_MONITOR_DISK', True) %}
+    {% set monitor_network = config.get('CON5013_MONITOR_NETWORK', True) %}
+    {% set monitor_gpu = config.get('CON5013_MONITOR_GPU', True) %}
     <div class="console-container">
         <!-- Header -->
         <div class="console-header">
@@ -605,7 +610,8 @@
                     </div>
                     <div class="panel-body">
                         <div class="row mb-4">
-                            <div class="col-md-6">
+                            {% if monitor_cpu %}
+                            <div class="col-md-6" id="cpu-card">
                                 <div class="metric-card">
                                     <h6>CPU Usage</h6>
                                     <div class="progress-bar">
@@ -614,7 +620,9 @@
                                     <small class="metric-contrast" id="cpu-label">--%</small>
                                 </div>
                             </div>
-                            <div class="col-md-6">
+                            {% endif %}
+                            {% if monitor_memory %}
+                            <div class="col-md-6" id="memory-card">
                                 <div class="metric-card">
                                     <h6>Memory Usage</h6>
                                     <div class="progress-bar">
@@ -623,7 +631,9 @@
                                     <small class="metric-contrast" id="memory-label">--% (-- / --)</small>
                                 </div>
                             </div>
-                            <div class="col-md-6">
+                            {% endif %}
+                            {% if monitor_disk %}
+                            <div class="col-md-6" id="disk-card">
                                 <div class="metric-card">
                                     <h6>Disk Usage</h6>
                                     <div class="progress-bar">
@@ -632,7 +642,9 @@
                                     <small class="metric-contrast" id="disk-label">--% (-- free)</small>
                                 </div>
                             </div>
-                            <div class="col-md-6">
+                            {% endif %}
+                            {% if monitor_network %}
+                            <div class="col-md-6" id="network-card">
                                 <div class="metric-card">
                                     <h6>Network I/O</h6>
                                     <div class="d-flex justify-content-between">
@@ -645,6 +657,18 @@
                                     </div>
                                 </div>
                             </div>
+                            {% endif %}
+                            {% if monitor_gpu %}
+                            <div class="col-md-6" id="gpu-card">
+                                <div class="metric-card">
+                                    <h6>GPU Metrics</h6>
+                                    <div class="metric-contrast">Detected GPUs: <span id="gpu-count">--</span></div>
+                                    <div id="gpu-list" style="margin-top: 10px;">
+                                        <small class="text-muted">No GPU data</small>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endif %}
                         </div>
 
                             <div class="d-flex justify-content-between align-items-center mb-2">
@@ -749,6 +773,13 @@
         // Logs functions (live data)
         const CON5013_CONFIG = {{ config | tojson }};
         const LOGS_API_BASE = `${CON5013_CONFIG.CON5013_URL_PREFIX}`;
+        const MONITOR_SETTINGS = {
+            cpu: CON5013_CONFIG.CON5013_MONITOR_CPU !== false,
+            memory: CON5013_CONFIG.CON5013_MONITOR_MEMORY !== false,
+            disk: CON5013_CONFIG.CON5013_MONITOR_DISK !== false,
+            network: CON5013_CONFIG.CON5013_MONITOR_NETWORK !== false,
+            gpu: CON5013_CONFIG.CON5013_MONITOR_GPU !== false,
+        };
         const logsContainerEl = document.getElementById('logs-container');
         const logSourceSel = document.getElementById('log-source');
         const logAutoChk = document.getElementById('log-autorefresh');
@@ -942,7 +973,7 @@
                 if (d.status !== 'success') return;
                 const s = d.stats || {};
                 // CPU
-                if (s.cpu) {
+                if (MONITOR_SETTINGS.cpu && s.cpu) {
                     const cpu = Math.round(s.cpu.usage_percent || 0);
                     const el = document.getElementById('cpu-progress');
                     if (el) {
@@ -956,7 +987,7 @@
                     if (lbl) lbl.textContent = `${cpu}%`;
                 }
                 // Memory
-                if (s.memory && s.memory.virtual) {
+                if (MONITOR_SETTINGS.memory && s.memory && s.memory.virtual) {
                     const mem = Math.round(s.memory.virtual.percent || 0);
                     const el = document.getElementById('memory-progress');
                     if (el) {
@@ -970,7 +1001,7 @@
                     if (lbl) lbl.textContent = `${mem}% (${s.memory.virtual.used_gb}GB / ${s.memory.virtual.total_gb}GB)`;
                 }
                 // Disk
-                if (s.disk && s.disk.usage) {
+                if (MONITOR_SETTINGS.disk && s.disk && s.disk.usage) {
                     const dsk = Math.round(s.disk.usage.percent || 0);
                     const el = document.getElementById('disk-progress');
                     if (el) {
@@ -983,8 +1014,33 @@
                     const lbl = document.getElementById('disk-label');
                     if (lbl) lbl.textContent = `${dsk}% (${s.disk.usage.free_gb}GB free)`;
                 }
+                // GPU
+                if (MONITOR_SETTINGS.gpu) {
+                    const gpuCountEl = document.getElementById('gpu-count');
+                    const gpuListEl = document.getElementById('gpu-list');
+                    if (gpuListEl) {
+                        if (s.gpus && (s.gpus.devices || s.gpus).length !== undefined) {
+                            const g = s.gpus.devices ? s.gpus : { devices: s.gpus.devices, count: s.gpus.count };
+                            const devices = g.devices || [];
+                            if (gpuCountEl) gpuCountEl.textContent = String(devices.length);
+                            const html = devices.map(dev => {
+                                const name = escapeHtml(dev.name || (`GPU ${dev.index}`));
+                                const util = Math.round(dev.utilization_percent || 0);
+                                const memUsed = dev.memory_used_mb || 0;
+                                const memTotal = dev.memory_total_mb || 0;
+                                const memInfo = memTotal ? `${memUsed}/${memTotal} MB` : `${memUsed} MB`;
+                                const temp = (dev.temperature_c === null || dev.temperature_c === undefined) ? '' : ` | ${dev.temperature_c}°C`;
+                                return `<div class="metric-contrast">${name}: ${util}% | ${memInfo}${temp}</div>`;
+                            }).join('');
+                            gpuListEl.innerHTML = html || '<small class="text-muted">GPU metrics available but no devices reported</small>';
+                        } else {
+                            if (gpuCountEl) gpuCountEl.textContent = '0';
+                            gpuListEl.innerHTML = '<small class="text-muted">No GPU metrics available</small>';
+                        }
+                    }
+                }
                 // Network: show rate (per second) and totals
-                if (s.network && s.network.io) {
+                if (MONITOR_SETTINGS.network && s.network && s.network.io) {
                     const now = Date.now() / 1000;
                     const downBytes = s.network.io.bytes_recv || 0;
                     const upBytes = s.network.io.bytes_sent || 0;
@@ -1017,6 +1073,8 @@
                     if (upRateEl) upRateEl.textContent = fmtRate(upRate);
                     if (dnTotEl) dnTotEl.textContent = fmtTotal(downBytes);
                     if (upTotEl) upTotEl.textContent = fmtTotal(upBytes);
+                } else if (!MONITOR_SETTINGS.network) {
+                    prevNet = { downBytes: null, upBytes: null, ts: null };
                 }
             } catch (e) { /* ignore */ }
         }
