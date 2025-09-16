@@ -178,19 +178,27 @@
             The interface will load automatically once the runtime is ready.  
             You can also open it anytime with the shortcut shown below, on any page where the script is active.  
             <br><br>
+            {% set script_src = url_for('con5013.static', filename='js/con5013.js') %}
             <pre>
-&lt;script src="/con5013/static/js/con5013.js"&gt;&lt;/script&gt;
+&lt;script src="{{ script_src }}"&gt;&lt;/script&gt;
             </pre>
         </p>
         <div class="loading-indicator" aria-live="polite">
             <span aria-hidden="true"></span>
-            <strong>Press Alt + C</strong> to launch the console
+            <strong>Press {{ config.get('CON5013_HOTKEY', 'Alt + C') }}</strong> to launch the console
         </div>
         <noscript>
             JavaScript is required to run the CON5013 console.  
             Please enable JavaScript in your browser to continue.
         </noscript>
     </main>
-    <script src="/con5013/static/js/con5013.js"></script>
+    <script>
+        window.CON5013_BOOTSTRAP = {{ config | tojson }};
+    </script>
+    <script
+        src="{{ script_src }}"
+        data-con5013-base="{{ config.get('CON5013_URL_PREFIX', '/con5013') }}"
+        data-con5013-hotkey="{{ config.get('CON5013_HOTKEY', 'Alt+C') }}"
+    ></script>
 </body>
 </html>

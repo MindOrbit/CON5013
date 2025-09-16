@@ -3,6 +3,8 @@
  * Interactive console functionality for Flask applications
  */
 
+const CON5013_SCRIPT_ELEMENT = typeof document !== 'undefined' ? document.currentScript : null;
+
 class Con5013Console {
     constructor(options = {}) {
         this.options = {
@@ -18,7 +20,9 @@ class Con5013Console {
             customButtonSelector: options.customButtonSelector || '[data-con5013-button]',
             ...options
         };
-        
+
+        this.options.baseUrl = this.normalizeBaseUrl(this.options.baseUrl);
+
         this.isOpen = false;
         this.currentTab = 'logs';
         this.currentLogSource = 'flask';
@@ -31,7 +35,7 @@ class Con5013Console {
         this.apiTestResults = [];
         this.apiSummary = null;
         this.apiVisibleEndpoints = [];
-        this.consolePrefix = (this.options.baseUrl || '/con5013').replace(/\/+$/, '') || '/con5013';
+        this.consolePrefix = this.deriveConsolePrefix(this.options.baseUrl);
         this.apiFilterElements = { dropdown: null, toggle: null, menu: null, summary: null };
         this.systemStats = {};
         this.features = {
@@ -50,10 +54,52 @@ class Con5013Console {
         this.connectivityOk = null; // null=unknown, true=ok, false=error
         this.prevNetwork = null;
         this.logAutoScrollPaused = false;
-        
+
         this.init();
     }
-    
+
+    normalizeBaseUrl(baseUrl) {
+        let normalized = '';
+        if (typeof baseUrl === 'string') {
+            normalized = baseUrl.trim();
+        }
+        if (!normalized) {
+            normalized = '/con5013';
+        }
+        if (/^https?:\/\//i.test(normalized)) {
+            const trimmed = normalized.replace(/\/+$/, '');
+            return trimmed || normalized;
+        }
+        if (!normalized.startsWith('/')) {
+            normalized = `/${normalized}`;
+        }
+        normalized = normalized.replace(/\/+$/, '');
+        return normalized;
+    }
+
+    deriveConsolePrefix(baseUrl) {
+        if (!baseUrl) {
+            return '/';
+        }
+        if (/^https?:\/\//i.test(baseUrl)) {
+            try {
+                const url = new URL(baseUrl);
+                const path = url.pathname ? url.pathname.replace(/\/+$/, '') : '';
+                return path || '/';
+            } catch (_) {
+                const stripped = baseUrl.replace(/^https?:\/\/[^/]+/i, '');
+                const sanitized = stripped.replace(/\/+$/, '');
+                return sanitized || '/';
+            }
+        }
+        if (!baseUrl.startsWith('/')) {
+            const sanitized = `/${baseUrl}`.replace(/\/+$/, '');
+            return sanitized || '/';
+        }
+        const cleaned = baseUrl.replace(/\/+$/, '');
+        return cleaned || '/';
+    }
+
     init() {
         this.ensureStylesInjected();
         this.createConsoleHTML();
@@ -70,8 +116,23 @@ class Con5013Console {
     ensureStylesInjected() {
         try {
             const href = `${this.options.baseUrl}/static/css/con5013.css`;
+            const absoluteHref = (() => {
+                try {
+                    return new URL(href, window.location.origin).href;
+                } catch (_) {
+                    return href;
+                }
+            })();
             const already = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
-                .some(l => (l.href || '').includes('/con5013/static/css/con5013.css'));
+                .some(link => {
+                    const current = link?.href || '';
+                    if (!current) return false;
+                    try {
+                        return new URL(current, window.location.href).href === absoluteHref;
+                    } catch (_) {
+                        return current === href || current.endsWith('/static/css/con5013.css');
+                    }
+                });
             if (!already) {
                 const link = document.createElement('link');
                 link.rel = 'stylesheet';
@@ -554,13 +615,35 @@ class Con5013Console {
     }
     
     setupHotkey() {
-        document.addEventListener('keydown', (e) => {
-            // Default hotkey: Alt + C
-            const key = (e.key || '').toLowerCase();
-            if (e.altKey && key === 'c') {
-                e.preventDefault();
-                this.toggle();
-            }
+        const rawHotkey = (this.options.hotkey || 'Alt+C').trim();
+        if (!rawHotkey) return;
+
+        const segments = rawHotkey.split('+').map(part => part.trim()).filter(Boolean);
+        if (segments.length === 0) return;
+
+        const keySegment = segments.pop();
+        const modifiers = segments.map(s => s.toLowerCase());
+        const key = (keySegment || '').toLowerCase();
+        const requiresAlt = modifiers.includes('alt');
+        const requiresShift = modifiers.includes('shift');
+        const requiresCtrl = modifiers.includes('ctrl') || modifiers.includes('control');
+        const requiresMeta = modifiers.includes('meta') || modifiers.includes('cmd') || modifiers.includes('command') || modifiers.includes('super');
+
+        document.addEventListener('keydown', (event) => {
+            const eventKey = (event.key || '').toLowerCase();
+            if (key && eventKey !== key) return;
+            if (requiresAlt !== !!event.altKey) return;
+            if (requiresShift !== !!event.shiftKey) return;
+            if (requiresCtrl !== !!event.ctrlKey) return;
+            if (requiresMeta !== !!event.metaKey) return;
+            // Prevent triggering when extra modifiers pressed
+            if (!requiresAlt && event.altKey) return;
+            if (!requiresShift && event.shiftKey) return;
+            if (!requiresCtrl && event.ctrlKey) return;
+            if (!requiresMeta && event.metaKey) return;
+
+            event.preventDefault();
+            this.toggle();
         });
     }
     
@@ -1749,7 +1832,82 @@ let con5013;
 
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-    con5013 = new Con5013Console();
+    const bootstrap = window.CON5013_BOOTSTRAP || window.CON5013_CONFIG || window.con5013_bootstrap || {};
+    const explicit = window.CON5013_OPTIONS || {};
+    const derived = {};
+
+    const pickString = (...values) => {
+        for (const value of values) {
+            if (typeof value === 'string' && value.trim()) {
+                return value;
+            }
+        }
+        return undefined;
+    };
+
+    if (explicit.baseUrl === undefined || explicit.baseUrl === null || explicit.baseUrl === '') {
+        const prefix = pickString(
+            explicit.baseUrl,
+            bootstrap.baseUrl,
+            bootstrap.url_prefix,
+            bootstrap.CON5013_URL_PREFIX
+        );
+        if (prefix) {
+            derived.baseUrl = prefix;
+        }
+    }
+
+    if (explicit.hotkey === undefined || explicit.hotkey === null || explicit.hotkey === '') {
+        const hotkey = pickString(explicit.hotkey, bootstrap.hotkey, bootstrap.CON5013_HOTKEY);
+        if (hotkey) {
+            derived.hotkey = hotkey;
+        }
+    }
+
+    if (explicit.updateInterval === undefined || explicit.updateInterval === null) {
+        const intervalCandidate = bootstrap.updateInterval ?? bootstrap.CON5013_SYSTEM_UPDATE_INTERVAL;
+        const numericInterval = Number(intervalCandidate);
+        if (!Number.isNaN(numericInterval) && numericInterval > 0) {
+            derived.updateInterval = numericInterval * 1000;
+        }
+    }
+
+    if (!derived.baseUrl || derived.baseUrl === '') {
+        const scripts = [];
+        if (CON5013_SCRIPT_ELEMENT) scripts.push(CON5013_SCRIPT_ELEMENT);
+        scripts.push(...document.querySelectorAll('script[data-con5013-base]'));
+        scripts.push(...document.querySelectorAll('script[src*="con5013/static/js/con5013.js"]'));
+        const scriptEl = scripts.find(el => el && el.getAttribute);
+        if (scriptEl) {
+            const attrBase = scriptEl.getAttribute('data-con5013-base');
+            if (attrBase && attrBase.trim()) {
+                derived.baseUrl = attrBase.trim();
+            }
+            if ((!derived.hotkey || derived.hotkey === '') && scriptEl.getAttribute('data-con5013-hotkey')) {
+                derived.hotkey = scriptEl.getAttribute('data-con5013-hotkey').trim();
+            }
+            if ((!derived.baseUrl || derived.baseUrl === '') && scriptEl.src) {
+                try {
+                    const parsed = new URL(scriptEl.src, window.location.href);
+                    const path = parsed.pathname.replace(/\/+static\/js\/con5013\.js$/i, '');
+                    if (parsed.origin === window.location.origin) {
+                        derived.baseUrl = path;
+                    } else {
+                        derived.baseUrl = `${parsed.origin}${path}`;
+                    }
+                } catch (_) {
+                    const raw = scriptEl.getAttribute('src') || '';
+                    const sanitized = raw.split('?')[0].split('#')[0].replace(/\/+static\/js\/con5013\.js$/i, '');
+                    if (sanitized) {
+                        derived.baseUrl = sanitized;
+                    }
+                }
+            }
+        }
+    }
+
+    const options = { ...derived, ...explicit };
+    con5013 = new Con5013Console(options);
 });
 
 // Export for module systems
