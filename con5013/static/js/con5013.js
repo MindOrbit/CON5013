@@ -45,6 +45,8 @@ class Con5013Console {
             system_monitor: true,
         };
         this.systemMetrics = {
+            system_info: true,
+            application: true,
             cpu: true,
             memory: true,
             disk: true,
@@ -708,10 +710,9 @@ class Con5013Console {
 
     updateSystemMetrics(settings = {}) {
         const normalized = { ...this.systemMetrics };
-        ['cpu', 'memory', 'disk', 'network', 'gpu'].forEach((key) => {
-            if (Object.prototype.hasOwnProperty.call(settings || {}, key)) {
-                normalized[key] = settings[key] !== false;
-            }
+        Object.entries(settings || {}).forEach(([key, value]) => {
+            if (value === undefined) return;
+            normalized[key] = value !== false;
         });
         this.systemMetrics = normalized;
     }
@@ -722,6 +723,8 @@ class Con5013Console {
 
     applySystemMetricToggles() {
         const selectors = {
+            system_info: '#con5013-system-info-card',
+            application: '#con5013-application-card',
             cpu: '#con5013-cpu-card',
             memory: '#con5013-memory-card',
             disk: '#con5013-disk-card',
@@ -1424,25 +1427,48 @@ class Con5013Console {
         this.renderCustomSystemBoxes(customBoxes);
 
         // System info
-        if (stats.system) {
-            document.getElementById('system-platform').textContent = stats.system.platform || 'Unknown';
-            document.getElementById('python-version').textContent = stats.system.python_version || 'Unknown';
+        const systemEnabled = this.isMetricEnabled('system_info');
+        if (systemEnabled && stats.system) {
+            const platformEl = document.getElementById('system-platform');
+            if (platformEl) platformEl.textContent = stats.system.platform || 'Unknown';
+            const pythonEl = document.getElementById('python-version');
+            if (pythonEl) pythonEl.textContent = stats.system.python_version || 'Unknown';
             const hostEl = document.getElementById('system-hostname');
             if (hostEl) hostEl.textContent = stats.system.hostname || 'Unknown';
             const archEl = document.getElementById('system-arch');
             if (archEl) archEl.textContent = (stats.system.machine || stats.system.arch || 'Unknown');
         }
-        
+
         // Application info
-        if (stats.application) {
-            document.getElementById('app-routes').textContent = stats.application.routes_count || '0';
-            document.getElementById('app-extensions').textContent = stats.application.extensions?.length || '0';
-            document.getElementById('app-debug').textContent = stats.application.debug ? 'Enabled' : 'Disabled';
-            
-            if (stats.application.uptime_formatted) {
-                document.getElementById('system-uptime').textContent = stats.application.uptime_formatted;
-            } else if (typeof stats.application.uptime_seconds === 'number') {
-                document.getElementById('system-uptime').textContent = this.formatDuration(stats.application.uptime_seconds);
+        const applicationStats = stats.application;
+        const applicationEnabled = this.isMetricEnabled('application');
+        if (applicationEnabled && applicationStats) {
+            const routesEl = document.getElementById('app-routes');
+            if (routesEl) routesEl.textContent = String(applicationStats.routes_count || '0');
+            const extensionsEl = document.getElementById('app-extensions');
+            if (extensionsEl) {
+                const count = Array.isArray(applicationStats.extensions)
+                    ? applicationStats.extensions.length
+                    : (applicationStats.extensions?.length || 0);
+                extensionsEl.textContent = String(count);
+            }
+            const debugEl = document.getElementById('app-debug');
+            if (debugEl) debugEl.textContent = applicationStats.debug ? 'Enabled' : 'Disabled';
+        }
+
+        if (applicationStats) {
+            const uptimeEl = document.getElementById('system-uptime');
+            if (uptimeEl) {
+                if (applicationStats.uptime_formatted) {
+                    uptimeEl.textContent = applicationStats.uptime_formatted;
+                } else if (typeof applicationStats.uptime_seconds === 'number') {
+                    uptimeEl.textContent = this.formatDuration(applicationStats.uptime_seconds);
+                }
+            }
+        } else if (systemEnabled) {
+            const uptimeEl = document.getElementById('system-uptime');
+            if (uptimeEl) {
+                uptimeEl.textContent = '—';
             }
         }
         

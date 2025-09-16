@@ -194,19 +194,34 @@ class TestCon5013Integration(unittest.TestCase):
     def test_flask_app_integration(self):
         """Test integration with Flask app."""
         console = Con5013(self.app)
-        
+
         # Check that extension is registered
         self.assertIn('con5013', self.app.extensions)
         self.assertEqual(self.app.extensions['con5013'], console)
-        
+
     def test_context_processor_injection(self):
         """Test that context processor is injected."""
         console = Con5013(self.app, config={'CON5013_AUTO_INJECT': True})
-        
+
         with self.app.test_request_context():
             # Context processor should be available
             processors = self.app.template_context_processors[None]
             self.assertTrue(len(processors) > 0)
+
+    def test_system_monitor_core_section_toggle(self):
+        """System monitor should respect configuration toggles for core cards."""
+        console = Con5013(
+            self.app,
+            config={
+                'CON5013_ENABLE_SYSTEM_MONITOR': True,
+                'CON5013_MONITOR_SYSTEM_INFO': False,
+                'CON5013_MONITOR_APPLICATION': False,
+            },
+        )
+
+        stats = console.get_system_stats()
+        self.assertNotIn('system', stats)
+        self.assertNotIn('application', stats)
 
 if __name__ == '__main__':
     # Run tests

@@ -109,6 +109,8 @@ class Con5013:
             
             # System monitoring
             'CON5013_SYSTEM_UPDATE_INTERVAL': 5,
+            'CON5013_MONITOR_SYSTEM_INFO': True,
+            'CON5013_MONITOR_APPLICATION': True,
             'CON5013_MONITOR_CPU': True,
             'CON5013_MONITOR_MEMORY': True,
             'CON5013_MONITOR_DISK': True,
