@@ -20,7 +20,7 @@ import time
 from collections import OrderedDict
 from typing import Any, Callable, Dict, Iterable, List, Optional, Union
 
-from flask import Flask
+from flask import Flask, render_template_string, url_for
 
 from .blueprint import con5013_blueprint
 from .core.api_scanner import APIScanner
@@ -254,31 +254,54 @@ class Con5013:
             logger.debug("Crawl4AI not found - skipping enhanced integration")
     
     def _generate_console_html(self):
-        """Generate the console overlay HTML."""
-        return '''
-        <!-- Con5013 Console Overlay -->
-        <div id="con5013-overlay" class="con5013-overlay">
-            <div class="con5013-window">
-                <div class="con5013-header">
-                    <div class="con5013-title">
-                        <i class="fas fa-terminal"></i>
-                        <span>Con5013 Console</span>
-                    </div>
-                    <div class="con5013-controls">
-                        <button class="con5013-btn" onclick="con5013.minimize()">
-                            <i class="fas fa-minus"></i>
-                        </button>
-                        <button class="con5013-btn" onclick="con5013.close()">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    </div>
-                </div>
-                <div class="con5013-content">
-                    <!-- Console content will be loaded here -->
-                </div>
-            </div>
-        </div>
-        '''
+        """Generate the auto-injected console assets."""
+
+        url_prefix = self.config.get('CON5013_URL_PREFIX', '/con5013') or '/con5013'
+        if not isinstance(url_prefix, str):
+            url_prefix = str(url_prefix)
+        if not url_prefix.startswith('/'):
+            url_prefix = f'/{url_prefix}'
+        if url_prefix != '/' and url_prefix.endswith('/'):
+            url_prefix = url_prefix.rstrip('/')
+
+        try:
+            script_src = url_for('con5013.static', filename='js/con5013.js')
+        except RuntimeError:
+            prefix = '' if url_prefix == '/' else url_prefix
+            script_src = f"{prefix}/static/js/con5013.js"
+
+        hotkey = self.config.get('CON5013_HOTKEY', 'Alt+C') or 'Alt+C'
+        update_interval = self.config.get('CON5013_SYSTEM_UPDATE_INTERVAL', 5)
+        payload = {
+            'baseUrl': url_prefix,
+            'url_prefix': url_prefix,
+            'hotkey': hotkey,
+            'updateInterval': update_interval,
+            'CON5013_URL_PREFIX': url_prefix,
+            'CON5013_HOTKEY': hotkey,
+            'CON5013_SYSTEM_UPDATE_INTERVAL': update_interval,
+        }
+
+        return render_template_string(
+            """<!-- Con5013 Console Assets -->
+<script>
+    (function () {
+        const defaults = {{ payload | tojson }};
+        const existing = window.CON5013_BOOTSTRAP || window.CON5013_CONFIG || window.con5013_bootstrap || null;
+        if (existing && typeof existing === 'object') {
+            window.CON5013_BOOTSTRAP = Object.assign({}, defaults, existing);
+        } else {
+            window.CON5013_BOOTSTRAP = defaults;
+        }
+    })();
+</script>
+<script src="{{ script_src }}" data-con5013-base="{{ base_url }}" data-con5013-hotkey="{{ hotkey }}" defer></script>
+""",
+            payload=payload,
+            script_src=script_src,
+            base_url=url_prefix,
+            hotkey=hotkey,
+        )
     
     # Public API methods
     def get_logs(self, source='app', limit=100, level=None):
