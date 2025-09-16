@@ -34,6 +34,13 @@ class Con5013Console {
             api_scanner: true,
             system_monitor: true,
         };
+        this.systemMetrics = {
+            cpu: true,
+            memory: true,
+            disk: true,
+            network: true,
+            gpu: true,
+        };
         this.connectivityOk = null; // null=unknown, true=ok, false=error
         this.prevNetwork = null;
         this.logAutoScrollPaused = false;
@@ -248,9 +255,9 @@ class Con5013Console {
 \\___| \\___/ _|\\_| ___/ \\__/  _| ___/
             </div>
                             <div class="con5013-subtitle">System Performance & Monitoring</div>
-                            
+
                             <div id="con5013-system" class="con5013-system">
-                                <div class="con5013-system-card">
+                                <div class="con5013-system-card" id="con5013-system-info-card">
                                     <div class="con5013-system-title">System Info</div>
                                     <div class="con5013-metric">
                                         <span class="con5013-metric-label">Platform</span>
@@ -274,37 +281,45 @@ class Con5013Console {
                                     </div>
                                 </div>
 
-                                <div class="con5013-system-card">
-                                    <div class="con5013-system-title">GPU</div>
-                                    <div id="con5013-gpu-list" class="con5013-gpu-list">
-                                        <div class="con5013-metric">
-                                            <span class="con5013-metric-label">GPUs</span>
-                                            <span class="con5013-metric-value" id="gpu-count">Detecting...</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="con5013-system-card">
-                                    <div class="con5013-system-title">Performance</div>
+                                <div class="con5013-system-card" id="con5013-cpu-card">
+                                    <div class="con5013-system-title">CPU</div>
                                     <div class="con5013-metric has-progress">
-                                        <span class="con5013-metric-label">CPU Usage</span>
+                                        <span class="con5013-metric-label">Usage</span>
                                         <span class="con5013-metric-value" id="cpu-usage">Loading...</span>
                                     </div>
                                     <div class="con5013-progress after-metric">
                                         <div class="con5013-progress-bar" id="cpu-progress" style="width: 0%"></div>
                                     </div>
-                                    <div class="con5013-divider"></div>
+                                </div>
+
+                                <div class="con5013-system-card" id="con5013-memory-card">
+                                    <div class="con5013-system-title">Memory</div>
                                     <div class="con5013-metric has-progress">
-                                        <span class="con5013-metric-label">Memory Usage</span>
+                                        <span class="con5013-metric-label">Usage</span>
                                         <span class="con5013-metric-value" id="memory-usage">Loading...</span>
                                     </div>
                                     <div class="con5013-progress after-metric">
                                         <div class="con5013-progress-bar" id="memory-progress" style="width: 0%"></div>
                                     </div>
-                                    <div class="con5013-divider"></div>
                                 </div>
 
-                                <div class="con5013-system-card">
+                                <div class="con5013-system-card" id="con5013-disk-card">
+                                    <div class="con5013-system-title">Storage</div>
+                                    <div class="con5013-metric has-progress">
+                                        <span class="con5013-metric-label">Disk Usage</span>
+                                        <span class="con5013-metric-value" id="disk-usage">Loading...</span>
+                                    </div>
+                                    <div class="con5013-progress after-metric">
+                                        <div class="con5013-progress-bar" id="disk-progress" style="width: 0%"></div>
+                                    </div>
+                                    <div class="con5013-divider"></div>
+                                    <div class="con5013-metric">
+                                        <span class="con5013-metric-label">Free Space</span>
+                                        <span class="con5013-metric-value" id="disk-free">Loading...</span>
+                                    </div>
+                                </div>
+
+                                <div class="con5013-system-card" id="con5013-network-card">
                                     <div class="con5013-system-title">Network</div>
                                     <div class="con5013-metric">
                                         <span class="con5013-metric-label">Download</span>
@@ -323,8 +338,18 @@ class Con5013Console {
                                         <span class="con5013-metric-value" id="net-totals">0 / 0</span>
                                     </div>
                                 </div>
-                                
-                                <div class="con5013-system-card">
+
+                                <div class="con5013-system-card" id="con5013-gpu-card">
+                                    <div class="con5013-system-title">GPU</div>
+                                    <div id="con5013-gpu-list" class="con5013-gpu-list">
+                                        <div class="con5013-metric">
+                                            <span class="con5013-metric-label">GPUs</span>
+                                            <span class="con5013-metric-value" id="gpu-count">Detecting...</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="con5013-system-card" id="con5013-application-card">
                                     <div class="con5013-system-title">Application</div>
                                     <div class="con5013-metric">
                                         <span class="con5013-metric-label">Routes</span>
@@ -337,22 +362,6 @@ class Con5013Console {
                                     <div class="con5013-metric">
                                         <span class="con5013-metric-label">Debug Mode</span>
                                         <span class="con5013-metric-value" id="app-debug">Loading...</span>
-                                    </div>
-                                </div>
-                                
-                                <div class="con5013-system-card">
-                                    <div class="con5013-system-title">Storage</div>
-                                    <div class="con5013-metric has-progress">
-                                        <span class="con5013-metric-label">Disk Usage</span>
-                                        <span class="con5013-metric-value" id="disk-usage">Loading...</span>
-                                    </div>
-                                    <div class="con5013-progress after-metric">
-                                        <div class="con5013-progress-bar" id="disk-progress" style="width: 0%"></div>
-                                    </div>
-                                    <div class="con5013-divider"></div>
-                                    <div class="con5013-metric">
-                                        <span class="con5013-metric-label">Free Space</span>
-                                        <span class="con5013-metric-value" id="disk-free">Loading...</span>
                                     </div>
                                 </div>
                             </div>
@@ -506,6 +515,7 @@ class Con5013Console {
             const payload = await res.json();
             if (payload && payload.info && payload.info.features) {
                 this.features = payload.info.features;
+                this.updateSystemMetrics(payload.info.features.system_monitor_metrics);
             }
             if (payload && payload.info && payload.info.default_log_source) {
                 this.defaultLogSource = payload.info.default_log_source;
@@ -555,6 +565,38 @@ class Con5013Console {
         hideTab('terminal', !!this.features.terminal);
         hideTab('api', !!this.features.api_scanner);
         hideTab('system', !!this.features.system_monitor);
+        this.applySystemMetricToggles();
+    }
+
+    updateSystemMetrics(settings = {}) {
+        const normalized = { ...this.systemMetrics };
+        ['cpu', 'memory', 'disk', 'network', 'gpu'].forEach((key) => {
+            if (Object.prototype.hasOwnProperty.call(settings || {}, key)) {
+                normalized[key] = settings[key] !== false;
+            }
+        });
+        this.systemMetrics = normalized;
+    }
+
+    isMetricEnabled(name) {
+        return !this.systemMetrics || this.systemMetrics[name] !== false;
+    }
+
+    applySystemMetricToggles() {
+        const selectors = {
+            cpu: '#con5013-cpu-card',
+            memory: '#con5013-memory-card',
+            disk: '#con5013-disk-card',
+            network: '#con5013-network-card',
+            gpu: '#con5013-gpu-card',
+        };
+        Object.entries(selectors).forEach(([metric, selector]) => {
+            const card = document.querySelector(selector);
+            if (!card) return;
+            if (!this.isMetricEnabled(metric)) {
+                card.remove();
+            }
+        });
     }
     
     startPeriodicUpdates() {
@@ -1119,36 +1161,36 @@ class Con5013Console {
         }
         
         // Performance metrics
-        if (stats.cpu) {
+        if (this.isMetricEnabled('cpu') && stats.cpu) {
             const cpuUsage = Math.round(stats.cpu.usage_percent || 0);
             document.getElementById('cpu-usage').textContent = `${cpuUsage}%`;
             document.getElementById('cpu-progress').style.width = `${cpuUsage}%`;
-            
+
             // Color coding
             const cpuProgress = document.getElementById('cpu-progress');
             cpuProgress.className = 'con5013-progress-bar';
             if (cpuUsage > 80) cpuProgress.classList.add('error');
             else if (cpuUsage > 60) cpuProgress.classList.add('warning');
         }
-        
-        if (stats.memory && stats.memory.virtual) {
+
+        if (this.isMetricEnabled('memory') && stats.memory && stats.memory.virtual) {
             const memoryUsage = Math.round(stats.memory.virtual.percent || 0);
             document.getElementById('memory-usage').textContent = `${memoryUsage}% (${stats.memory.virtual.used_gb}GB / ${stats.memory.virtual.total_gb}GB)`;
             document.getElementById('memory-progress').style.width = `${memoryUsage}%`;
-            
+
             // Color coding
             const memoryProgress = document.getElementById('memory-progress');
             memoryProgress.className = 'con5013-progress-bar';
             if (memoryUsage > 80) memoryProgress.classList.add('error');
             else if (memoryUsage > 60) memoryProgress.classList.add('warning');
         }
-        
-        if (stats.disk && stats.disk.usage) {
+
+        if (this.isMetricEnabled('disk') && stats.disk && stats.disk.usage) {
             const diskUsage = Math.round(stats.disk.usage.percent || 0);
             document.getElementById('disk-usage').textContent = `${diskUsage}%`;
             document.getElementById('disk-free').textContent = `${stats.disk.usage.free_gb}GB free`;
             document.getElementById('disk-progress').style.width = `${diskUsage}%`;
-            
+
             // Color coding
             const diskProgress = document.getElementById('disk-progress');
             diskProgress.className = 'con5013-progress-bar';
@@ -1157,7 +1199,7 @@ class Con5013Console {
         }
 
         // GPU info (if available)
-        const gpuList = document.getElementById('con5013-gpu-list');
+        const gpuList = this.isMetricEnabled('gpu') ? document.getElementById('con5013-gpu-list') : null;
         if (gpuList && stats.gpus && (stats.gpus.devices || stats.gpus).length !== undefined) {
             const g = stats.gpus.devices ? stats.gpus : { devices: stats.gpus.devices, count: stats.gpus.count };
             const devices = g.devices || [];
@@ -1198,10 +1240,23 @@ class Con5013Console {
                 </div>
                 ${inner}
             `;
+        } else if (gpuList) {
+            const countEl = document.getElementById('gpu-count');
+            if (countEl) countEl.textContent = '0';
+            gpuList.innerHTML = `
+                <div class="con5013-metric">
+                    <span class="con5013-metric-label">GPUs</span>
+                    <span class="con5013-metric-value" id="gpu-count">0</span>
+                </div>
+                <div class="con5013-metric">
+                    <span class="con5013-metric-label">Status</span>
+                    <span class="con5013-metric-value">No GPU metrics available</span>
+                </div>
+            `;
         }
 
         // Network info (rates computed client-side)
-        if (stats.network && stats.network.io) {
+        if (this.isMetricEnabled('network') && stats.network && stats.network.io) {
             const io = stats.network.io;
             const ts = stats.timestamp || (Date.now() / 1000);
             let downRate = 0, upRate = 0;
@@ -1222,6 +1277,8 @@ class Con5013Console {
             if (totalsEl) totalsEl.textContent = `${this.formatBytes(io.bytes_recv)} / ${this.formatBytes(io.bytes_sent)}`;
 
             this.prevNetwork = { ts, bytes_recv: io.bytes_recv, bytes_sent: io.bytes_sent };
+        } else if (!this.isMetricEnabled('network')) {
+            this.prevNetwork = null;
         }
     }
     
