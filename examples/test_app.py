@@ -182,7 +182,7 @@ con5013 = Con5013(app, config={
     return render_template_string(html_template)
 
 @app.route('/api/test/info')
-def test_info():
+def api_test_info():
     """Test endpoint that returns information."""
     logger.info("Test info endpoint called")
     return jsonify({
@@ -197,7 +197,7 @@ def test_info():
     })
 
 @app.route('/api/test/error')
-def test_error():
+def api_test_error():
     """Test endpoint that generates an error."""
     logger.error("Test error endpoint called - simulating error")
     return jsonify({
@@ -207,7 +207,7 @@ def test_error():
     }), 500
 
 @app.route('/api/test/slow')
-def test_slow():
+def api_test_slow():
     """Test endpoint that takes time to respond."""
     logger.info("Test slow endpoint called - simulating slow response")
     time.sleep(2)  # Simulate slow processing
@@ -219,7 +219,7 @@ def test_slow():
     })
 
 @app.route('/api/test/logs', methods=['POST'])
-def test_logs():
+def api_test_logs():
     """Generate random log entries for testing."""
     import random
     

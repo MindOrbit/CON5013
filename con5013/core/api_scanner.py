@@ -79,23 +79,37 @@ class APIScanner:
         if include_con5013 is None:
             include_con5013 = True
         
-        # Build effective exclude list based on include_con5013 flag
-        prefix = self.config.get('CON5013_URL_PREFIX', '/con5013')
-        excludes = list(self.exclude_endpoints)
-        if include_con5013:
-            excludes = [e for e in excludes if e and (prefix not in e and e not in (prefix,))]
+        # Build effective metadata about Con5013 prefix and configured excludes
+        prefix = (self.config.get('CON5013_URL_PREFIX', '/con5013') or '').rstrip('/')
+        exclude_patterns = [pattern for pattern in (self.exclude_endpoints or []) if pattern]
 
         protected_list = set(self.config.get('CON5013_API_PROTECTED_ENDPOINTS', []))
 
         for rule in self.app.url_map.iter_rules():
-            # Skip excluded endpoints
-            if any(exclude in rule.rule for exclude in excludes):
+            is_system = False
+            if prefix:
+                if rule.rule == prefix or rule.rule.startswith(f"{prefix}/"):
+                    is_system = True
+
+            # Optionally hide Con5013 endpoints entirely
+            if is_system and not include_con5013:
                 continue
 
-            # Optionally exclude Con5013 endpoints
-            if not include_con5013:
-                if rule.rule.startswith(prefix):
-                    continue
+            category = 'active'
+            exclude_reason = None
+            if is_system:
+                category = 'system'
+            else:
+                matched_excludes = [pattern for pattern in exclude_patterns if pattern in rule.rule]
+                if matched_excludes:
+                    category = 'excluded'
+                    unique_patterns = sorted(set(matched_excludes))
+                    if unique_patterns:
+                        if len(unique_patterns) == 1:
+                            exclude_reason = f'Matches exclude pattern "{unique_patterns[0]}"'
+                        else:
+                            joined = ', '.join(f'"{p}"' for p in unique_patterns)
+                            exclude_reason = f'Matches exclude patterns {joined}'
             
             # Filter methods
             methods = [method for method in rule.methods 
@@ -128,7 +142,9 @@ class APIScanner:
                 'protected': is_protected,
                 'status': 'discovered',
                 'last_tested': None,
-                'test_results': {}
+                'test_results': {},
+                'category': category,
+                'exclude_reason': exclude_reason
             }
             
             endpoints.append(endpoint_info)
@@ -298,20 +314,22 @@ class APIScanner:
     def test_all_endpoints(self, include_con5013: Optional[bool] = None) -> Dict[str, Any]:
         """Test all discovered endpoints."""
         endpoints = self.discover_endpoints(include_con5013=include_con5013)
+        testable_endpoints = [ep for ep in endpoints if ep.get('category') != 'excluded']
         results = {
-            'total_endpoints': len(endpoints),
+            'total_endpoints': len(testable_endpoints),
             'tested_endpoints': 0,
             'successful_tests': 0,
             'failed_tests': 0,
             'total_time_ms': 0,
             'results': [],
             'summary': {},
-            'timestamp': time.time()
+            'timestamp': time.time(),
+            'skipped_endpoints': len(endpoints) - len(testable_endpoints),
         }
         
         start_time = time.time()
         
-        for endpoint in endpoints:
+        for endpoint in testable_endpoints:
             # Test each method for the endpoint
             for method in endpoint['methods']:
                 if endpoint.get('protected'):

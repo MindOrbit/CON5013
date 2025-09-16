@@ -166,6 +166,40 @@
             gap: 8px;
         }
 
+        .dropdown-menu-dark {
+            background: var(--console-surface);
+            border: 1px solid var(--console-border);
+            border-radius: 6px;
+            padding: 4px 0;
+            min-width: 180px;
+        }
+
+        .dropdown-menu-dark .dropdown-item {
+            color: var(--console-text);
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .dropdown-menu-dark .dropdown-item:hover,
+        .dropdown-menu-dark .dropdown-item:focus {
+            background: var(--console-border);
+            color: var(--console-accent);
+        }
+
+        .dropdown-menu-dark .filter-check {
+            color: var(--console-accent);
+            font-weight: 600;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .dropdown-menu-dark .dropdown-item.active .filter-check {
+            opacity: 1;
+        }
+
         .panel-body {
             flex: 1;
             padding: 20px 25px;
@@ -544,13 +578,35 @@
                         </h2>
                         <div class="panel-controls">
                             <button class="console-btn" id="api-scan-btn" onclick="scanEndpoints()">
-                                Scan
+                                Discover
                             </button>
+                            <div class="dropdown">
+                                <button class="console-btn dropdown-toggle" type="button" id="api-filters-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                                    Filters
+                                </button>
+                                <div class="dropdown-menu dropdown-menu-dark" aria-labelledby="api-filters-toggle" id="api-filters-menu">
+                                    <button type="button" class="dropdown-item api-filter-option active" data-filter="active">
+                                        <span>Active</span>
+                                        <span class="filter-check">✓</span>
+                                    </button>
+                                    <button type="button" class="dropdown-item api-filter-option" data-filter="excluded">
+                                        <span>Excluded</span>
+                                        <span class="filter-check">✓</span>
+                                    </button>
+                                    <button type="button" class="dropdown-item api-filter-option" data-filter="system">
+                                        <span>System</span>
+                                        <span class="filter-check">✓</span>
+                                    </button>
+                                </div>
+                            </div>
                             <button class="console-btn" id="api-testall-btn" onclick="testAllEndpoints()">
                                 Test All
                             </button>
+                            <button class="console-btn" id="api-export-btn">
+                                Export
+                            </button>
                             <label class="console-btn ms-2" style="display:flex; align-items:center; gap:8px; margin:0;">
-                                <input type="checkbox" id="api-include-con5013" checked style="margin:0;"> 
+                                <input type="checkbox" id="api-include-con5013" checked style="margin:0;">
                                 <span style="line-height:1;">Include Con5013</span>
                             </label>
                         </div>
@@ -560,13 +616,13 @@
                             <div class="col-md-3">
                                 <div class="metric-card">
                                     <div class="metric-value" id="api-total">0</div>
-                                    <div class="metric-label">Endpoints</div>
+                                    <div class="metric-label">Total Endpoints</div>
                                 </div>
                             </div>
                             <div class="col-md-3">
                                 <div class="metric-card">
                                     <div class="metric-value text-success" id="api-ok">0</div>
-                                    <div class="metric-label">OK</div>
+                                    <div class="metric-label">Working</div>
                                 </div>
                             </div>
                             <div class="col-md-3">
@@ -885,7 +941,13 @@
         }
 
         function escapeHtml(text) {
-            const d = document.createElement('div'); d.textContent = text; return d.innerHTML;
+            const d = document.createElement('div');
+            d.textContent = text == null ? '' : text;
+            return d.innerHTML;
+        }
+
+        function escapeJsString(value) {
+            return JSON.stringify(value == null ? '' : String(value)).slice(1, -1);
         }
 
         async function execTerminal(cmd) {
@@ -1176,11 +1238,308 @@
         const API_BASE = CON5013_CONFIG.CON5013_URL_PREFIX;
         const apiScanBtn = document.getElementById('api-scan-btn');
         const apiTestAllBtn = document.getElementById('api-testall-btn');
+        const apiExportBtn = document.getElementById('api-export-btn');
         const endpointsList = document.getElementById('endpoints-list');
         const apiTotalEl = document.getElementById('api-total');
         const apiOkEl = document.getElementById('api-ok');
         const apiFailEl = document.getElementById('api-fail');
         const apiAvgEl = document.getElementById('api-avg');
+        const filterButtons = Array.from(document.querySelectorAll('.api-filter-option'));
+
+        const apiFilters = {
+            active: true,
+            excluded: false,
+            system: false,
+        };
+
+        const con5013Prefix = (CON5013_CONFIG.CON5013_URL_PREFIX || '').replace(/\/$/, '');
+        const defaultExcludeList = CON5013_CONFIG.CON5013_API_EXCLUDE_ENDPOINTS || [];
+
+        let allEndpoints = [];
+
+        function slugify(s){ return String(s||'').replace(/[^a-zA-Z0-9]/g,'_'); }
+
+        function normalizeEndpoint(ep) {
+            const copy = { ...(ep || {}) };
+            copy.category = determineCategory(copy);
+            copy.exclude_reason = copy.exclude_reason || copy.exclusion_reason || null;
+            if (copy.description === 'No description available') {
+                copy.description = '';
+            }
+            copy.lastResults = {};
+            return copy;
+        }
+
+        function determineCategory(ep) {
+            if (!ep) return 'active';
+            if (ep.category) return String(ep.category).toLowerCase();
+            const rule = ep.rule || ep.url || '';
+            if (con5013Prefix && rule) {
+                if (rule === con5013Prefix || rule.startsWith(`${con5013Prefix}/`)) {
+                    return 'system';
+                }
+            }
+            if (Array.isArray(defaultExcludeList) && rule) {
+                if (defaultExcludeList.some(pattern => pattern && rule.includes(pattern))) {
+                    return 'excluded';
+                }
+            }
+            return 'active';
+        }
+
+        function formatCategoryLabel(category) {
+            if (!category) return '';
+            const normalized = category.toString().replace(/_/g, ' ').trim();
+            if (!normalized) return '';
+            return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+        }
+
+        function formatStatusLabel(status) {
+            if (!status) return '';
+            const normalized = status.toString().replace(/_/g, ' ').trim();
+            if (!normalized) return '';
+            return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+        }
+
+        function activeFilterCount() {
+            return Object.values(apiFilters).filter(Boolean).length;
+        }
+
+        function updateFilterButtons() {
+            filterButtons.forEach(btn => {
+                const key = btn.getAttribute('data-filter');
+                const enabled = !!apiFilters[key];
+                btn.classList.toggle('active', enabled);
+                btn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+            });
+        }
+
+        filterButtons.forEach(btn => {
+            btn.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                const key = btn.getAttribute('data-filter');
+                if (!key) return;
+                if (apiFilters[key] && activeFilterCount() === 1) {
+                    return;
+                }
+                apiFilters[key] = !apiFilters[key];
+                updateFilterButtons();
+                renderEndpoints();
+                updateEndpointMetrics();
+            });
+        });
+
+        function getFilteredEndpoints() {
+            return allEndpoints.filter(ep => {
+                const category = (ep.category || 'active');
+                if (category === 'system') {
+                    return apiFilters.system;
+                }
+                if (category === 'excluded') {
+                    return apiFilters.excluded;
+                }
+                return apiFilters.active;
+            });
+        }
+
+        function determineEndpointStatus(ep) {
+            if (!ep) return 'unknown';
+            if (ep.category === 'excluded') return 'excluded';
+            if (ep.protected) return 'protected';
+            const results = Object.values(ep.lastResults || {});
+            if (!results.length) return 'not_tested';
+            return results.some(r => r.status && r.status !== 'success') ? 'failed' : 'success';
+        }
+
+        function computeEndpointDisplayState(ep) {
+            if (ep.category === 'excluded') {
+                return {
+                    label: 'Excluded',
+                    badgeClass: 'badge bg-secondary me-2',
+                    pathClass: 'text-muted',
+                    tooltip: ep.exclude_reason || 'Excluded via configuration.',
+                };
+            }
+            if (ep.protected) {
+                return {
+                    label: 'Protected',
+                    badgeClass: 'badge bg-secondary me-2',
+                    pathClass: 'text-warning',
+                    tooltip: 'Protected endpoints are not tested automatically.',
+                };
+            }
+            const results = Object.values(ep.lastResults || {});
+            if (!results.length) {
+                return {
+                    label: 'Not tested',
+                    badgeClass: 'badge bg-warning text-dark me-2',
+                    pathClass: 'text-warning',
+                    tooltip: 'No tests have been run for this endpoint yet.',
+                };
+            }
+            results.sort((a, b) => (b.received_at || 0) - (a.received_at || 0));
+            const latest = results[0];
+            const hasFailure = results.some(r => r.status && r.status !== 'success');
+            const hasSuccess = results.some(r => r.status === 'success');
+            const times = results
+                .map(r => Number.isFinite(r.response_time_ms) ? r.response_time_ms : null)
+                .filter(v => v != null);
+            const avg = times.length ? Math.round(times.reduce((sum, val) => sum + val, 0) / times.length) : null;
+            const tooltipParts = [];
+            if (latest && latest.method) tooltipParts.push(`Method: ${latest.method}`);
+            if (avg !== null) tooltipParts.push(`Avg ${avg} ms`);
+            const tooltip = tooltipParts.join(' • ');
+            const statusText = `${latest && latest.status_code ? `${latest.status_code} ` : ''}${latest && latest.status_label ? latest.status_label : ''}`.trim();
+            if (hasFailure) {
+                return {
+                    label: statusText || 'Failed',
+                    badgeClass: 'badge bg-danger me-2',
+                    pathClass: 'text-danger',
+                    tooltip,
+                };
+            }
+            if (hasSuccess) {
+                return {
+                    label: statusText || 'Success',
+                    badgeClass: 'badge bg-success me-2',
+                    pathClass: 'text-success',
+                    tooltip,
+                };
+            }
+            return {
+                label: statusText || 'Unknown',
+                badgeClass: 'badge bg-secondary me-2',
+                pathClass: '',
+                tooltip,
+            };
+        }
+
+        function buildEndpointRow(ep) {
+            const methods = (ep.methods || []).map(m => `<span class="endpoint-method method-${m.toLowerCase()}">${escapeHtml(m)}</span>`).join(' ');
+            const rule = ep.rule || ep.url || '';
+            const idBase = `ep-${slugify(rule)}`;
+            const display = computeEndpointDisplayState(ep);
+            const statusTooltip = display.tooltip ? ` title="${escapeHtml(display.tooltip)}"` : '';
+            const descriptionBlock = ep.description ? `<div class="small text-muted mt-1">${escapeHtml(ep.description)}</div>` : '';
+            const excludeNote = ep.category === 'excluded' && ep.exclude_reason ? `<div class="small text-muted mt-1">${escapeHtml(ep.exclude_reason)}</div>` : '';
+            const categoryLabel = ep.category && ep.category !== 'active'
+                ? `<span class="badge bg-secondary text-uppercase ms-2">${escapeHtml(formatCategoryLabel(ep.category))}</span>`
+                : '';
+            const methodList = Array.isArray(ep.methods) && ep.methods.length ? ep.methods : ['GET'];
+            const displayMethod = methodList.includes('GET') ? 'GET' : methodList[0];
+            const safeMethod = escapeJsString(displayMethod);
+            const safeRule = escapeJsString(ep.rule || rule);
+            const safeSample = escapeJsString(ep.sample_path || rule);
+            const actions = (!ep.protected && ep.category !== 'excluded')
+                ? `<button class="btn btn-sm btn-outline-secondary" onclick="copyHttpToTerminal('${safeMethod}', '${safeSample}')">Copy</button>
+                            <button class="btn btn-sm btn-outline-primary" onclick="uiTestEndpoint('${safeMethod}', '${safeRule}', '${safeSample}')">Test</button>`
+                : '';
+            return `
+                <div class="endpoint-item" data-category="${escapeHtml(ep.category || 'active')}">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap" style="gap:12px;">
+                        <div>
+                            ${methods}
+                            <code id="${idBase}-path" class="${display.pathClass || 'text-warning'}">${escapeHtml(rule)}</code>
+                            ${categoryLabel}
+                            ${descriptionBlock}
+                            ${excludeNote}
+                        </div>
+                        <div class="d-flex align-items-center" style="gap:8px;">
+                            <span id="${idBase}-status" class="${display.badgeClass}"${statusTooltip}>${display.label}</span>
+                            ${actions}
+                        </div>
+                    </div>
+                </div>`;
+        }
+
+        function renderEndpoints() {
+            if (!endpointsList) return;
+            if (!allEndpoints.length) {
+                endpointsList.innerHTML = '<div class="text-muted">No endpoints found</div>';
+                return;
+            }
+            const visible = getFilteredEndpoints();
+            if (!visible.length) {
+                endpointsList.innerHTML = '<div class="text-muted">No endpoints match the selected filters.</div>';
+                return;
+            }
+            endpointsList.innerHTML = visible.map(buildEndpointRow).join('');
+        }
+
+        function updateEndpointMetrics() {
+            const visible = getFilteredEndpoints();
+            if (apiTotalEl) apiTotalEl.textContent = visible.length;
+            let working = 0;
+            let failed = 0;
+            const times = [];
+            visible.forEach(ep => {
+                const status = determineEndpointStatus(ep);
+                if (status === 'success') working += 1;
+                else if (status === 'failed') failed += 1;
+                const results = Object.values(ep.lastResults || {});
+                results.forEach(r => {
+                    if (Number.isFinite(r.response_time_ms)) {
+                        times.push(r.response_time_ms);
+                    }
+                });
+            });
+            if (apiOkEl) apiOkEl.textContent = working;
+            if (apiFailEl) apiFailEl.textContent = failed;
+            if (apiAvgEl) {
+                apiAvgEl.textContent = times.length
+                    ? `${Math.round(times.reduce((sum, val) => sum + val, 0) / times.length)}ms`
+                    : '-';
+            }
+        }
+
+        function recordEndpointResult(result) {
+            if (!result) return false;
+            const method = (result.method || result.request_method || '').toString().toUpperCase() || 'GET';
+            const endpointKey = result.endpoint || result.rule || '';
+            const urlKey = result.url || '';
+            if (!endpointKey && !urlKey) return false;
+            const matches = allEndpoints.filter(ep => {
+                const rule = ep.rule || '';
+                const sample = ep.sample_path || '';
+                const url = ep.url || '';
+                return (endpointKey && (rule === endpointKey || sample === endpointKey)) ||
+                       (urlKey && (url === urlKey || rule === urlKey || sample === urlKey));
+            });
+            if (!matches.length) return false;
+            const statusRaw = result.status_label || result.status || '';
+            const statusLabel = formatStatusLabel(statusRaw);
+            const statusLower = statusRaw ? statusRaw.toString().toLowerCase() : '';
+            const responseTime = typeof result.response_time_ms === 'number'
+                ? result.response_time_ms
+                : Number(result.response_time_ms);
+            const now = Date.now();
+            matches.forEach(ep => {
+                if (!ep.lastResults) ep.lastResults = {};
+                ep.lastResults[method] = {
+                    status: statusLower,
+                    status_label: statusLabel,
+                    status_code: result.status_code,
+                    response_time_ms: Number.isFinite(responseTime) ? responseTime : null,
+                    method,
+                    received_at: now,
+                };
+            });
+            return true;
+        }
+
+        function recordBulkResults(results) {
+            if (!Array.isArray(results) || !results.length) return;
+            let updated = false;
+            results.forEach(res => {
+                if (recordEndpointResult(res)) {
+                    updated = true;
+                }
+            });
+            if (updated) {
+                renderEndpoints();
+            }
+        }
 
         async function loadEndpoints() {
             try {
@@ -1188,68 +1547,40 @@
                 const r = await fetch(`${API_BASE}/api/scanner/discover?include_con5013=${includeCon ? 'true' : 'false'}`);
                 const d = await r.json();
                 if (d.status === 'success') {
-                    const eps = d.endpoints || [];
-                    renderEndpoints(eps);
-                    apiTotalEl && (apiTotalEl.textContent = eps.length);
-                    // Immediately test all to populate metrics and per-endpoint status
+                    const eps = Array.isArray(d.endpoints) ? d.endpoints : [];
+                    allEndpoints = eps.map(normalizeEndpoint);
+                    renderEndpoints();
+                    updateEndpointMetrics();
                     await testAllEndpointsUI();
+                } else {
+                    throw new Error(d.message || 'Unable to discover endpoints');
                 }
-            } catch (e) { console.error('Failed to discover endpoints', e); }
-        }
-
-        function slugify(s){ return String(s||'').replace(/[^a-zA-Z0-9]/g,'_'); }
-
-        function renderEndpoints(endpoints) {
-            if (!endpointsList) return;
-            if (!Array.isArray(endpoints) || endpoints.length === 0) {
-                endpointsList.innerHTML = '<div class="text-muted">No endpoints found</div>';
-                return;
+            } catch (e) {
+                console.error('Failed to discover endpoints', e);
+                allEndpoints = [];
+                if (endpointsList) {
+                    endpointsList.innerHTML = '<div class="text-danger">Failed to load endpoints.</div>';
+                }
+                updateEndpointMetrics();
             }
-            const itemHTML = (ep) => {
-                const methods = (ep.methods || []).map(m => `<span class="endpoint-method method-${m.toLowerCase()}">${m}</span>`).join(' ');
-                const desc = ep.description ? `<small class="text-muted ms-2">${escapeHtml(ep.description)}</small>` : '';
-                const rule = escapeHtml(ep.rule || ep.url || '');
-                const mlist = ep.methods || ['GET'];
-                const displayMethod = mlist.includes('GET') ? 'GET' : mlist[0];
-                const idBase = `ep-${slugify(ep.rule || ep.url || '')}`;
-                const protectedBadge = ep.protected ? '<span class="badge bg-secondary me-2">Protected</span>' : '';
-                const testButtons = ep.protected
-                    ? ''
-                    : `<button class="btn btn-sm btn-outline-secondary" onclick="copyHttpToTerminal('${displayMethod}', '${rule}')">Copy</button>
-                       <button class="btn btn-sm btn-outline-primary" onclick="uiTestEndpoint('${displayMethod}', '${rule}')">Test</button>`;
-                return `
-                <div class="endpoint-item">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            ${methods}
-                            <code id="${idBase}-path" class="text-warning">${rule}</code>
-                            ${desc}
-                        </div>
-                        <div>
-                            ${protectedBadge}<span id="${idBase}-status" class="badge bg-warning text-dark me-2">Not tested</span>
-                            ${testButtons}
-                        </div>
-                    </div>
-                </div>`
-            };
-            endpointsList.innerHTML = endpoints.map(itemHTML).join('');
         }
 
-        async function uiTestEndpoint(method, path) {
+        async function uiTestEndpoint(method, rule, samplePath) {
             try {
+                const target = samplePath || rule;
                 const r = await fetch(`${API_BASE}/api/scanner/test`, {
-                    method:'POST', headers:{'Content-Type':'application/json'},
-                    body: JSON.stringify({ endpoint: path, method })
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ endpoint: target, method }),
                 });
                 const d = await r.json();
                 const res = d.result || d;
                 if (d.status === 'success' || res.status) {
-                    const msg = `HTTP ${method} ${path}\nStatus: ${res.status_code} (${res.status})\nTime: ${res.response_time_ms} ms`;
+                    const msg = `HTTP ${method} ${target}\nStatus: ${res.status_code} (${res.status})\nTime: ${res.response_time_ms} ms`;
                     appendTermLine(`<div style=\"color:#9f9; white-space:pre-wrap;\">${escapeHtml(msg)}</div>`);
-                    // Update the badge on this row
-                    applyResultToList({ ...res, method, endpoint: path });
-                    // Refresh aggregate metrics to stay accurate
-                    await testAllEndpointsUI();
+                    recordEndpointResult({ ...res, method, endpoint: rule });
+                    renderEndpoints();
+                    updateEndpointMetrics();
                 } else {
                     appendTermLine(`<span style='color:#ff6b6b;'>Test failed: ${escapeHtml(d.message||'Unknown')}</span>`);
                 }
@@ -1265,58 +1596,68 @@
         }
         window.copyHttpToTerminal = copyHttpToTerminal;
 
-        function applyResultToList(result){
-            let endpoint = result.endpoint || result.url || '';
-            const candidates = [];
-            const addCandidate = (s) => { if (s) candidates.push(`ep-${slugify(s)}`); };
-            addCandidate(endpoint);
-            // Try trimming or adding trailing slash for matching
-            if (endpoint.endsWith('/')) addCandidate(endpoint.slice(0, -1));
-            else addCandidate(endpoint + '/');
-            // Also try URL if provided
-            if (result.url && result.url !== endpoint) {
-                addCandidate(result.url);
-            }
-            let el = null, pathEl = null, id = null;
-            for (const cid of candidates) {
-                const statusEl = document.getElementById(`${cid}-status`);
-                if (statusEl) { el = statusEl; id = cid; pathEl = document.getElementById(`${cid}-path`); break; }
-            }
-            if (!el) return;
-            el.textContent = `${result.status_code || ''} ${result.status || ''}`.trim();
-            el.className = 'badge me-2 ' + ((result.status === 'success') ? 'bg-success' : (result.status==='timeout' || result.status==='connection_error') ? 'bg-warning text-dark' : 'bg-danger');
-            el.title = `Time: ${Math.round(result.response_time_ms||0)} ms`;
-            // Also color the endpoint path text to reflect status
-            // pathEl was resolved alongside el
-            if (pathEl) {
-                let cls = 'text-danger';
-                if (result.status === 'success') cls = 'text-success';
-                else if (result.status === 'timeout' || result.status === 'connection_error') cls = 'text-warning';
-                pathEl.className = cls;
-            }
-        }
-
         async function testAllEndpointsUI() {
             try {
+                if (!allEndpoints.length) {
+                    updateEndpointMetrics();
+                    return;
+                }
                 const includeCon = document.getElementById('api-include-con5013')?.checked;
                 const r = await fetch(`${API_BASE}/api/scanner/test-all?include_con5013=${includeCon ? 'true' : 'false'}`, { method:'POST' });
                 const d = await r.json();
                 if (d.status === 'success') {
-                    const summary = d.results || d; // blueprint nests under 'results'
-                    const ok = summary.successful_tests || 0;
-                    const fail = summary.failed_tests || 0;
-                    const avg = Math.round(summary.average_response_time || 0);
-                    apiOkEl && (apiOkEl.textContent = ok);
-                    apiFailEl && (apiFailEl.textContent = fail);
-                    apiAvgEl && (apiAvgEl.textContent = `${avg}ms`);
-                    (summary.results || []).forEach(applyResultToList);
+                    const summary = d.results || d;
+                    recordBulkResults(summary.results || []);
+                    updateEndpointMetrics();
                 }
             } catch (e) { console.error('Failed to test all', e); }
         }
 
+        function exportEndpoints() {
+            const visible = getFilteredEndpoints();
+            const payload = {
+                generated_at: new Date().toISOString(),
+                filters: { ...apiFilters },
+                total: visible.length,
+                endpoints: visible.map(ep => {
+                    const status = determineEndpointStatus(ep);
+                    const results = Object.values(ep.lastResults || {}).map(r => ({
+                        method: r.method,
+                        status: r.status_label || formatStatusLabel(r.status),
+                        status_code: r.status_code,
+                        response_time_ms: r.response_time_ms,
+                    }));
+                    return {
+                        rule: ep.rule,
+                        url: ep.url,
+                        category: ep.category,
+                        protected: !!ep.protected,
+                        methods: ep.methods,
+                        status,
+                        results,
+                    };
+                }),
+            };
+            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `api_endpoints_${Date.now()}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
         apiScanBtn && apiScanBtn.addEventListener('click', loadEndpoints);
-        document.getElementById('api-include-con5013')?.addEventListener('change', loadEndpoints);
         apiTestAllBtn && apiTestAllBtn.addEventListener('click', testAllEndpointsUI);
+        apiExportBtn && apiExportBtn.addEventListener('click', exportEndpoints);
+        document.getElementById('api-include-con5013')?.addEventListener('change', () => {
+            loadEndpoints();
+        });
+
+        updateFilterButtons();
+
         // Load endpoints when switching to API tab
         document.querySelectorAll('.nav-item').forEach(btn => {
             btn.addEventListener('click', () => {
