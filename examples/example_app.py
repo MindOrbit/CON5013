@@ -1,307 +1,727 @@
 #!/usr/bin/env python3
-"""
-Test Flask Application for Con5013
-This demonstrates how to integrate Con5013 with a Flask application.
+"""Con5013 immersive playground example.
+
+This Flask application demonstrates how to integrate the Con5013 console
+with a modern landing page that doubles as an interactive guide. The page
+covers every module (Logs, Terminal, API, System), exposes quick launchers,
+and lets developers experiment with the JavaScript client directly in the
+browser.
 """
 
-import os
-import sys
-import time
+from __future__ import annotations
+
+import json
 import logging
-from flask import Flask, jsonify, request, render_template_string
+import os
+import random
+import sys
+import textwrap
+import time
+from datetime import datetime
+from typing import Dict, List
 
-# Add the parent directory to the path so we can import con5013
+from flask import Flask, jsonify, render_template_string, request
+
+# Allow running the example without installing the package first.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from con5013 import Con5013
+from con5013 import Con5013  # noqa: E402  pylint: disable=wrong-import-position
 
-# Create Flask app
-app = Flask(__name__)
-app.config['SECRET_KEY'] = 'test-secret-key-for-con5013'
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+THEME_PRESETS: Dict[str, Dict[str, str]] = {
+    "Aurora": {
+        "--con5013-primary": "#38bdf8",
+        "--con5013-secondary": "#818cf8",
+        "--con5013-success": "#22c55e",
+        "--con5013-warning": "#f97316",
+        "--con5013-error": "#ef4444",
+        "--con5013-dark": "#0f172a",
+        "--con5013-darker": "#020617",
+    },
+    "Sunset": {
+        "--con5013-primary": "#f59e0b",
+        "--con5013-secondary": "#f97316",
+        "--con5013-success": "#34d399",
+        "--con5013-warning": "#facc15",
+        "--con5013-error": "#fb7185",
+        "--con5013-dark": "#1f2937",
+        "--con5013-darker": "#111827",
+    },
+    "Neon Matrix": {
+        "--con5013-primary": "#22d3ee",
+        "--con5013-secondary": "#14b8a6",
+        "--con5013-success": "#34d399",
+        "--con5013-warning": "#facc15",
+        "--con5013-error": "#f472b6",
+        "--con5013-dark": "#031633",
+        "--con5013-darker": "#010b1a",
+    },
+    "Studio": {
+        "--con5013-primary": "#a855f7",
+        "--con5013-secondary": "#6366f1",
+        "--con5013-success": "#10b981",
+        "--con5013-warning": "#f97316",
+        "--con5013-error": "#ef4444",
+        "--con5013-dark": "#111827",
+        "--con5013-darker": "#0b1120",
+    },
+}
 
-# Initialize Con5013 with custom configuration
-con5013 = Con5013(app, config={
-    'CON5013_URL_PREFIX': '/console',
-    'CON5013_THEME': 'dark',
-    'CON5013_ENABLE_LOGS': True,
-    'CON5013_ENABLE_TERMINAL': True,
-    'CON5013_ENABLE_API_SCANNER': True,
-    'CON5013_ENABLE_SYSTEM_MONITOR': True,
-    'CON5013_CRAWL4AI_INTEGRATION': False,  # Set to True if testing with Crawl4AI
-    'CON5013_LOG_SOURCES': ['app', 'test', 'demo']
-})
 
-# Test routes to generate some activity
-@app.route('/')
-def home():
-    """Home page with Con5013 integration demo."""
-    logger.info("Home page accessed")
-    
-    html_template = """
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Con5013 Test Application</title>
-        <style>
-            body {
-                font-family: Arial, sans-serif;
-                max-width: 800px;
-                margin: 0 auto;
-                padding: 20px;
-                background: #f5f5f5;
-            }
-            .header {
-                background: #1a1a1a;
-                color: #00ff00;
-                padding: 20px;
-                border-radius: 8px;
-                margin-bottom: 20px;
-                text-align: center;
-            }
-            .section {
-                background: white;
-                padding: 20px;
-                border-radius: 8px;
-                margin-bottom: 20px;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            }
-            .button {
-                background: #007bff;
-                color: white;
-                padding: 10px 20px;
-                border: none;
-                border-radius: 4px;
-                cursor: pointer;
-                margin: 5px;
-                text-decoration: none;
-                display: inline-block;
-            }
-            .button:hover {
-                background: #0056b3;
-            }
-            .console-button {
-                background: #00ff00;
-                color: #000;
-                font-weight: bold;
-            }
-            .console-button:hover {
-                background: #00cc00;
-            }
-            .code {
-                background: #f8f9fa;
-                padding: 15px;
-                border-radius: 4px;
-                border-left: 4px solid #007bff;
-                font-family: 'Courier New', monospace;
-                margin: 10px 0;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="header">
-            <h1>🚀 Con5013 Test Application</h1>
-            <p>The Ultimate Flask Console Extension</p>
-        </div>
-        
-        <div class="section">
-            <h2>🎯 Quick Access</h2>
-            <p>Access the Con5013 console using any of these methods:</p>
-            <a href="/console" class="button console-button">Open Full Console</a>
-            <a href="/console/overlay" class="button console-button">Open Overlay Console</a>
-            <p><strong>Or use the floating console button in the bottom-right corner!</strong></p>
-        </div>
-        
-        <div class="section">
-            <h2>🧪 Test Features</h2>
-            <p>Try these endpoints to generate activity for monitoring:</p>
-            <a href="/api/test/info" class="button">Test Info Endpoint</a>
-            <a href="/api/test/error" class="button">Test Error Endpoint</a>
-            <a href="/api/test/slow" class="button">Test Slow Endpoint</a>
-            <button onclick="generateLogs()" class="button">Generate Random Logs</button>
-        </div>
-        
-        <div class="section">
-            <h2>📊 Integration Code</h2>
-            <p>Here's how Con5013 was integrated into this application:</p>
-            <div class="code">
-from con5013 import Con5013
+def create_app() -> Flask:
+    """Build and configure the Flask demonstration app."""
 
-app = Flask(__name__)
-con5013 = Con5013(app, config={
-    'CON5013_URL_PREFIX': '/console',
-    'CON5013_THEME': 'dark',
-    'CON5013_ENABLE_LOGS': True,
-    'CON5013_ENABLE_TERMINAL': True,
-    'CON5013_ENABLE_API_SCANNER': True,
-    'CON5013_ENABLE_SYSTEM_MONITOR': True
-})
-            </div>
-        </div>
-        
-        <div class="section">
-            <h2>🔧 Available Features</h2>
-            <ul>
-                <li><strong>Real-time Logs:</strong> Monitor application logs in real-time</li>
-                <li><strong>Interactive Terminal:</strong> Execute commands directly from the console</li>
-                <li><strong>API Scanner:</strong> Discover and test all application endpoints</li>
-                <li><strong>System Monitor:</strong> View CPU, memory, and performance metrics</li>
-                <li><strong>Overlay Mode:</strong> Non-intrusive floating console</li>
-                <li><strong>Dark Theme:</strong> Professional developer-friendly interface</li>
-            </ul>
-        </div>
-        
-        <script>
-            function generateLogs() {
-                fetch('/api/test/logs', { method: 'POST' })
-                    .then(response => response.json())
-                    .then(data => {
-                        alert('Generated ' + data.count + ' log entries!');
-                    })
-                    .catch(error => {
-                        alert('Error generating logs: ' + error.message);
-                    });
-            }
-        </script>
-        
-        <!-- Con5013 Overlay Integration -->
-        <iframe src="/console/overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; border: none; pointer-events: none; z-index: 999999;" id="con5013-overlay"></iframe>
-        <script>
-            // Make overlay interactive
-            document.getElementById('con5013-overlay').style.pointerEvents = 'auto';
-        </script>
-    </body>
-    </html>
-    """
-    
-    return render_template_string(html_template)
-
-@app.route('/api/test/info')
-def test_info():
-    """Test endpoint that returns information."""
-    logger.info("Test info endpoint called")
-    return jsonify({
-        'status': 'success',
-        'message': 'This is a test info endpoint',
-        'timestamp': time.time(),
-        'data': {
-            'version': '1.0.0',
-            'environment': 'test',
-            'features': ['logs', 'terminal', 'api_scanner', 'system_monitor']
-        }
-    })
-
-@app.route('/api/test/error')
-def test_error():
-    """Test endpoint that generates an error."""
-    logger.error("Test error endpoint called - simulating error")
-    return jsonify({
-        'status': 'error',
-        'message': 'This is a simulated error for testing purposes',
-        'timestamp': time.time()
-    }), 500
-
-@app.route('/api/test/slow')
-def test_slow():
-    """Test endpoint that takes time to respond."""
-    logger.info("Test slow endpoint called - simulating slow response")
-    time.sleep(2)  # Simulate slow processing
-    logger.info("Test slow endpoint completed")
-    return jsonify({
-        'status': 'success',
-        'message': 'This endpoint took 2 seconds to respond',
-        'timestamp': time.time()
-    })
-
-@app.route('/api/test/logs', methods=['POST'])
-def test_logs():
-    """Generate random log entries for testing."""
-    import random
-    
-    log_messages = [
-        "User authentication successful",
-        "Database connection established",
-        "Cache miss for key: user_123",
-        "Processing background task",
-        "Email notification sent",
-        "File upload completed",
-        "Session expired for user",
-        "API rate limit check passed",
-        "Backup process started",
-        "Configuration reloaded"
-    ]
-    
-    log_levels = [
-        (logging.INFO, 'info'),
-        (logging.WARNING, 'warning'),
-        (logging.ERROR, 'error'),
-        (logging.DEBUG, 'debug')
-    ]
-    
-    count = random.randint(5, 15)
-    for i in range(count):
-        level, level_name = random.choice(log_levels)
-        message = random.choice(log_messages)
-        logger.log(level, f"{message} (test #{i+1})")
-    
-    return jsonify({
-        'status': 'success',
-        'message': f'Generated {count} log entries',
-        'count': count,
-        'timestamp': time.time()
-    })
-
-@app.route('/api/users/<int:user_id>')
-def get_user(user_id):
-    """Test endpoint with parameters."""
-    logger.info(f"User {user_id} data requested")
-    return jsonify({
-        'user_id': user_id,
-        'username': f'user_{user_id}',
-        'email': f'user_{user_id}@example.com',
-        'status': 'active'
-    })
-
-@app.route('/api/users', methods=['POST'])
-def create_user():
-    """Test endpoint for creating users."""
-    data = request.get_json() or {}
-    logger.info(f"Creating new user: {data.get('username', 'unknown')}")
-    return jsonify({
-        'status': 'created',
-        'user_id': 12345,
-        'message': 'User created successfully'
-    }), 201
-
-@app.route('/health')
-def health_check():
-    """Health check endpoint."""
-    return jsonify({
-        'status': 'healthy',
-        'timestamp': time.time(),
-        'uptime': time.time() - app.start_time if hasattr(app, 'start_time') else 0
-    })
-
-if __name__ == '__main__':
-    # Record start time for uptime calculation
-    app.start_time = time.time()
-    
-    print("🚀 Starting Con5013 Test Application")
-    print("📊 Console available at: http://localhost:5001/console")
-    print("🎯 Overlay available at: http://localhost:5001/console/overlay")
-    print("🏠 Home page: http://localhost:5001/")
-    print("=" * 60)
-    
-    # Run the application
-    app.run(
-        host='0.0.0.0',
-        port=5001,
-        debug=True,
-        use_reloader=False  # Disable reloader to prevent Con5013 double initialization
+    app = Flask(__name__)
+    app.config.update(
+        SECRET_KEY="con5013-example-secret",
+        JSON_SORT_KEYS=False,
     )
 
+    # Set up structured logging so the Logs tab has rich data to work with.
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+    app.logger.setLevel(logging.INFO)
+
+    console = Con5013(
+        app,
+        config={
+            "CON5013_THEME": "dark",
+            "CON5013_ENABLE_LOGS": True,
+            "CON5013_ENABLE_TERMINAL": True,
+            "CON5013_ENABLE_API_SCANNER": True,
+            "CON5013_ENABLE_SYSTEM_MONITOR": True,
+            "CON5013_LOG_SOURCES": ["example_app.log"],
+            "CON5013_MONITOR_GPU": True,
+            "CON5013_SYSTEM_CUSTOM_BOXES": [],
+        },
+    )
+
+    # Attach an additional logger so the Logs tab showcases multiple sources.
+    worker_logger = logging.getLogger("demo.worker")
+    worker_logger.setLevel(logging.INFO)
+    if console.log_monitor:
+        console.log_monitor.attach_logger("demo.worker", alias="worker")
+
+    # Register a dynamic custom system card to emphasise extensibility.
+    def demo_pulse_box() -> Dict[str, object]:
+        horizon = random.randint(12, 48)
+        load = random.uniform(35, 92)
+        return {
+            "title": "Demo Pulse",
+            "rows": [
+                {"name": "Orchestrations", "value": f"{random.randint(4, 18)} active"},
+                {
+                    "name": "Job Throughput",
+                    "value": f"{random.randint(320, 720)} rows/min",
+                    "progress": {"value": random.randint(55, 96)},
+                },
+                {
+                    "name": "Batch Window",
+                    "value": f"{horizon} min",
+                    "progress": {"value": min(horizon * 2, 100)},
+                },
+                {
+                    "name": "Synthetic Load",
+                    "value": f"{load:.1f}%",
+                    "progress": {"value": int(load)},
+                },
+            ],
+            "description": "Synthetic metrics generated by example_app to illustrate custom boxes.",
+        }
+
+    console.add_system_box("demo-pulse", provider=demo_pulse_box, order=10)
+
+    # Expose a custom terminal command that returns a curated insight report.
+    @console.terminal_engine.command("demo:insight")
+    def demo_insight_command(args: List[str]):
+        """Summarise demo application health directly inside the terminal."""
+
+        summary = {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "features": {
+                "logs": "enabled",
+                "terminal": "enabled",
+                "api_scanner": "enabled",
+                "system_monitor": "enabled",
+            },
+            "next_steps": [
+                "Toggle modules in the playground to see tabs appear/disappear",
+                "Open the API tab and batch-test the /demo routes",
+                "Use the Theme Playground to restyle the overlay in real-time",
+            ],
+        }
+
+        pretty = json.dumps(summary, indent=2)
+        return {
+            "output": pretty,
+            "type": "text",
+            "description": "Formatted JSON so the terminal auto-detects the structure.",
+        }
+
+    register_routes(app)
+
+    return app
+
+
+def register_routes(app: Flask) -> None:
+    """Register demonstration routes and the interactive landing page."""
+
+    @app.route("/")
+    def index():
+        html = render_template_string(
+            LANDING_TEMPLATE,
+            theme_presets=json.dumps(THEME_PRESETS, indent=2),
+            server_config_snippet=textwrap.dedent(
+                """
+                from con5013 import Con5013
+
+                console = Con5013(app, config={
+                    "CON5013_THEME": "dark",
+                    "CON5013_ENABLE_LOGS": True,
+                    "CON5013_ENABLE_TERMINAL": True,
+                    "CON5013_ENABLE_API_SCANNER": True,
+                    "CON5013_ENABLE_SYSTEM_MONITOR": True,
+                    "CON5013_LOG_SOURCES": ["example_app.log"],
+                })
+                """
+            ).strip(),
+        )
+        return html
+
+    @app.post("/demo/log-burst")
+    def demo_log_burst():
+        levels = [logging.INFO, logging.WARNING, logging.ERROR]
+        messages = [
+            "Cache warm completed",
+            "Connected to upstream data provider",
+            "Scheduled batch enqueued",
+            "Synthetic anomaly detected",
+            "Worker heartbeat is healthy",
+        ]
+        count = int(request.json.get("count", 5)) if request.is_json else 5
+        count = max(1, min(count, 25))
+        for _ in range(count):
+            level = random.choice(levels)
+            message = random.choice(messages)
+            logging.getLogger("demo.worker").log(level, "%s (burst)", message)
+            logging.getLogger("example_app").log(level, "%s (example)", message)
+        return jsonify({"status": "ok", "count": count})
+
+    @app.get("/demo/api/users")
+    def demo_users() -> Dict[str, object]:
+        data = [
+            {"id": 101, "name": "Ada Lovelace", "role": "architect"},
+            {"id": 102, "name": "Alan Turing", "role": "analyst"},
+            {"id": 103, "name": "Grace Hopper", "role": "systems"},
+        ]
+        return {"users": data, "count": len(data)}
+
+    @app.post("/demo/api/users")
+    def create_demo_user():
+        payload = request.get_json(silent=True) or {}
+        user = {
+            "id": random.randint(200, 999),
+            "name": payload.get("name", "New Teammate"),
+            "role": payload.get("role", "observer"),
+            "created_at": datetime.utcnow().isoformat() + "Z",
+        }
+        logging.getLogger("demo.worker").info("Provisioned demo user %s", user["name"])
+        return jsonify({"status": "created", "user": user}), 201
+
+    @app.get("/demo/api/health")
+    def demo_health():
+        return {
+            "status": "green",
+            "uptime_seconds": round(time.time() - app.start_time, 2),
+            "features": ["logs", "terminal", "api", "system"],
+        }
+
+    @app.get("/demo/api/slow")
+    def demo_slow_endpoint():
+        time.sleep(0.6)
+        return {"status": "ok", "duration": 0.6}
+
+
+LANDING_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Con5013 • Interactive Example Console</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            color-scheme: dark;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: radial-gradient(circle at top, #1f2937 0%, #0f172a 35%, #020617 100%);
+            color: #f8fafc;
+            display: flex;
+            flex-direction: column;
+        }
+        main { flex: 1; padding: 72px 24px 96px; }
+        h1, h2, h3 { margin: 0; }
+        p { color: #cbd5f5; line-height: 1.6; }
+        a { color: #38bdf8; }
+        .hero {
+            max-width: 1040px;
+            margin: 0 auto 64px;
+            text-align: center;
+        }
+        .hero h1 {
+            font-size: clamp(2.8rem, 4vw, 4rem);
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            color: #f8fafc;
+        }
+        .hero p {
+            margin: 24px auto 0;
+            font-size: 1.1rem;
+            max-width: 760px;
+        }
+        .glass-panel {
+            background: linear-gradient(135deg, rgba(148,163,184,0.14), rgba(15,23,42,0.42));
+            border: 1px solid rgba(148, 163, 184, 0.3);
+            border-radius: 28px;
+            padding: 32px;
+            backdrop-filter: blur(16px);
+            box-shadow: 0 32px 80px -32px rgba(15, 23, 42, 0.65);
+            margin: 0 auto 40px;
+            max-width: 1100px;
+        }
+        .panel-title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .panel-title h2 {
+            font-size: 1.6rem;
+            font-weight: 600;
+        }
+        .launch-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 18px;
+        }
+        .launch-button {
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            background: rgba(15, 23, 42, 0.7);
+            color: #f8fafc;
+            padding: 18px 22px;
+            border-radius: 18px;
+            text-align: left;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+        }
+        .launch-button span.label {
+            font-size: 1.05rem;
+            font-weight: 600;
+        }
+        .launch-button span.helper { color: #94a3b8; font-size: 0.95rem; }
+        .launch-button:hover {
+            transform: translateY(-4px);
+            border-color: rgba(56, 189, 248, 0.7);
+            background: rgba(15, 23, 42, 0.9);
+        }
+        .playground-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 24px;
+        }
+        .card {
+            border: 1px solid rgba(148, 163, 184, 0.28);
+            border-radius: 24px;
+            background: rgba(15, 23, 42, 0.6);
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .card h3 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #f8fafc;
+        }
+        select, input[type="text"], textarea {
+            width: 100%;
+            padding: 12px 14px;
+            border-radius: 14px;
+            border: 1px solid rgba(148, 163, 184, 0.4);
+            background: rgba(15, 23, 42, 0.8);
+            color: #f8fafc;
+            font-family: inherit;
+        }
+        label.toggle {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 12px 14px;
+            border-radius: 14px;
+            background: rgba(148, 163, 184, 0.08);
+        }
+        label.toggle span { color: #e2e8f0; }
+        .tag-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 24px;
+            margin-top: 12px;
+        }
+        .tab-card {
+            border-radius: 24px;
+            border: 1px solid rgba(148, 163, 184, 0.28);
+            background: rgba(15, 23, 42, 0.7);
+            padding: 24px;
+        }
+        .tab-card h3 { font-size: 1.25rem; margin-bottom: 12px; }
+        .tab-card ul { margin: 0; padding-left: 20px; color: #cbd5f5; }
+        .tab-card li { margin-bottom: 8px; }
+        pre.code-block {
+            background: rgba(15, 23, 42, 0.85);
+            border-radius: 18px;
+            padding: 20px;
+            color: #e2e8f0;
+            border: 1px solid rgba(148, 163, 184, 0.28);
+            overflow-x: auto;
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+        .theme-preview {
+            border-radius: 18px;
+            border: 1px dashed rgba(56, 189, 248, 0.45);
+            padding: 16px;
+            background: rgba(8, 47, 73, 0.35);
+            font-family: 'Courier New', monospace;
+            color: #bae6fd;
+            font-size: 0.9rem;
+        }
+        .footer {
+            text-align: center;
+            color: #64748b;
+            font-size: 0.9rem;
+            margin-top: 64px;
+        }
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 12px;
+            border-radius: 12px;
+            background: rgba(148, 163, 184, 0.15);
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            font-size: 0.85rem;
+            color: #e2e8f0;
+        }
+        button.inline {
+            border: none;
+            background: rgba(56, 189, 248, 0.12);
+            color: #38bdf8;
+            padding: 10px 14px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background 0.2s ease;
+            font-weight: 500;
+        }
+        button.inline:hover { background: rgba(56, 189, 248, 0.22); }
+        @media (max-width: 720px) {
+            main { padding: 48px 18px 72px; }
+            .glass-panel { padding: 24px; }
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <section class="hero">
+            <h1>Meet the Con5013 Playground</h1>
+            <p>Launch the console instantly, explore how every tab works, and restyle the glassmorphism overlay without leaving the page. This demo pairs live Con5013 telemetry with narrative guidance so you can master the Logs, Terminal, API, and System modules in minutes.</p>
+        </section>
+
+        <section class="glass-panel">
+            <div class="panel-title">
+                <h2>Quick launchers</h2>
+                <span class="badge">Hotkey: Alt + C</span>
+            </div>
+            <div class="launch-grid">
+                <button class="launch-button" id="open-default">
+                    <span class="label">Open overlay</span>
+                    <span class="helper">Shows the last active tab with your selected theme.</span>
+                </button>
+                <button class="launch-button" id="open-logs">
+                    <span class="label">Jump to Logs</span>
+                    <span class="helper">Observe live entries, switch sources, and export snapshots.</span>
+                </button>
+                <button class="launch-button" id="open-terminal">
+                    <span class="label">Run demo:insight</span>
+                    <span class="helper">Opens the Terminal and executes the custom command.</span>
+                </button>
+                <button class="launch-button" id="open-api">
+                    <span class="label">Explore API Map</span>
+                    <span class="helper">Loads discovery results for all /demo endpoints.</span>
+                </button>
+            </div>
+        </section>
+
+        <section class="glass-panel">
+            <div class="panel-title">
+                <h2>Overlay playground</h2>
+                <button class="inline" id="generate-logs">Generate log burst</button>
+            </div>
+            <div class="playground-grid">
+                <div class="card">
+                    <h3>Theme playground</h3>
+                    <p>Switch presets to rewrite the CSS variables that power <code>con5013.css</code>. The overlay updates instantly.</p>
+                    <select id="theme-select">
+                        {% for name in theme_presets | fromjson | list %}
+                        <option value="{{ name }}">{{ name }}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="theme-preview" id="theme-preview"></div>
+                </div>
+                <div class="card">
+                    <h3>Module toggles</h3>
+                    <p>Mirror feature-flagging logic from configuration without restarting the app.</p>
+                    <label class="toggle"><span>Logs tab</span><input type="checkbox" data-module-toggle="logs" checked></label>
+                    <label class="toggle"><span>Terminal tab</span><input type="checkbox" data-module-toggle="terminal" checked></label>
+                    <label class="toggle"><span>API tab</span><input type="checkbox" data-module-toggle="api_scanner" checked></label>
+                    <label class="toggle"><span>System tab</span><input type="checkbox" data-module-toggle="system_monitor" checked></label>
+                </div>
+                <div class="card">
+                    <h3>Floating button</h3>
+                    <p>Place the FAB anywhere on screen or hide it when you wire your own launcher.</p>
+                    <label class="toggle"><span>Bottom right</span><input type="radio" name="fab" value="bottom-right" checked></label>
+                    <label class="toggle"><span>Bottom left</span><input type="radio" name="fab" value="bottom-left"></label>
+                    <label class="toggle"><span>Top right</span><input type="radio" name="fab" value="top-right"></label>
+                    <label class="toggle"><span>Top left</span><input type="radio" name="fab" value="top-left"></label>
+                    <label class="toggle"><span>Hide FAB</span><input type="checkbox" id="fab-visibility" checked></label>
+                </div>
+                <div class="card">
+                    <h3>System metrics focus</h3>
+                    <p>Toggle individual cards to curate your operational dashboard.</p>
+                    <label class="toggle"><span>System info</span><input type="checkbox" data-metric-toggle="system_info" checked></label>
+                    <label class="toggle"><span>CPU</span><input type="checkbox" data-metric-toggle="cpu" checked></label>
+                    <label class="toggle"><span>Memory</span><input type="checkbox" data-metric-toggle="memory" checked></label>
+                    <label class="toggle"><span>Disk</span><input type="checkbox" data-metric-toggle="disk" checked></label>
+                    <label class="toggle"><span>Network</span><input type="checkbox" data-metric-toggle="network" checked></label>
+                    <label class="toggle"><span>GPU</span><input type="checkbox" data-metric-toggle="gpu" checked></label>
+                </div>
+            </div>
+        </section>
+
+        <section class="glass-panel">
+            <div class="panel-title">
+                <h2>Understand each module</h2>
+            </div>
+            <div class="tag-grid">
+                <div class="tab-card">
+                    <h3>Logs</h3>
+                    <p>Streams Python logging output, file-backed sources, and attached loggers into a searchable timeline.</p>
+                    <ul>
+                        <li>Configure sources with <code>CON5013_LOG_SOURCES</code> or attach them programmatically.</li>
+                        <li>Filter by level, export views, and pause auto-scroll when investigating incidents.</li>
+                        <li>Use the REST endpoints under <code>/con5013/api/logs</code> to automate log retrieval.</li>
+                    </ul>
+                </div>
+                <div class="tab-card">
+                    <h3>Terminal</h3>
+                    <p>Execute curated commands with history, HTTP helpers, and optional Python evaluation.</p>
+                    <ul>
+                        <li>Register custom commands via <code>@console.terminal_engine.command</code>.</li>
+                        <li>Enable Python evaluation with <code>CON5013_TERMINAL_ALLOW_PY</code> when needed.</li>
+                        <li>Automate runs using <code>openCon5013Console({ command })</code> from your own UI.</li>
+                    </ul>
+                </div>
+                <div class="tab-card">
+                    <h3>API</h3>
+                    <p>Discovers Flask routes, generates sample paths, and batch-tests endpoints with timing metrics.</p>
+                    <ul>
+                        <li>Protect sensitive routes using <code>CON5013_API_PROTECTED_ENDPOINTS</code>.</li>
+                        <li>Invoke discovery programmatically at <code>/con5013/api/scanner/discover</code>.</li>
+                        <li>Export reports to CI/CD by calling <code>/test-all</code> after deployments.</li>
+                    </ul>
+                </div>
+                <div class="tab-card">
+                    <h3>System</h3>
+                    <p>Displays CPU, memory, disk, and network telemetry with optional GPU and custom metric cards.</p>
+                    <ul>
+                        <li>Toggle collectors with <code>CON5013_MONITOR_*</code> flags per environment.</li>
+                        <li>Inject domain-specific data via <code>console.add_system_box(...)</code>.</li>
+                        <li>Query live metrics from <code>/con5013/api/system/stats</code> and <code>/health</code>.</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <section class="glass-panel">
+            <div class="panel-title">
+                <h2>Server-side wiring</h2>
+            </div>
+            <pre class="code-block">{{ server_config_snippet }}</pre>
+            <p>Drop the JavaScript client on any template where you want instant access to the overlay:</p>
+            <pre class="code-block">&lt;script src="/con5013/static/js/con5013.js" data-con5013-hotkey="Alt+C"&gt;&lt;/script&gt;</pre>
+        </section>
+
+        <div class="footer">
+            Con5013 ships with overlay mode, REST endpoints, and customization hooks out of the box. Mix and match them to fit your workflow.
+        </div>
+    </main>
+
+    <script>
+        window.CON5013_OPTIONS = {
+            floatingButtonPosition: 'bottom-right',
+            hideFabWhenOpen: true,
+            autoFloatingButton: true,
+        };
+    </script>
+    <script src="/con5013/static/js/con5013.js" data-con5013-hotkey="Alt+C"></script>
+    <script>
+        const themePresets = {{ theme_presets | safe }};
+
+        function renderThemePreview(presetName) {
+            const preview = document.getElementById('theme-preview');
+            if (!preview) return;
+            const preset = themePresets[presetName] || {};
+            const lines = Object.entries(preset).map(([key, value]) => `${key}: ${value};`);
+            preview.textContent = `:root\n${lines.map(line => `  ${line}`).join('\n')}`;
+        }
+
+        function applyTheme(presetName) {
+            const preset = themePresets[presetName] || {};
+            Object.entries(preset).forEach(([key, value]) => {
+                document.documentElement.style.setProperty(key, value);
+            });
+            renderThemePreview(presetName);
+        }
+
+        function withConsoleReady(callback) {
+            if (window.con5013) {
+                callback(window.con5013);
+                return;
+            }
+            window.addEventListener('con5013:ready', (event) => {
+                callback(event.detail.instance);
+            }, { once: true });
+        }
+
+        function syncModuleToggles(instance) {
+            document.querySelectorAll('[data-module-toggle]').forEach((input) => {
+                const key = input.getAttribute('data-module-toggle');
+                if (!key) return;
+                input.checked = !!instance.features[key];
+            });
+        }
+
+        function syncMetricToggles(instance) {
+            document.querySelectorAll('[data-metric-toggle]').forEach((input) => {
+                const key = input.getAttribute('data-metric-toggle');
+                if (!key) return;
+                input.checked = instance.systemMetrics[key] !== false;
+            });
+        }
+
+        document.getElementById('theme-select').addEventListener('change', (event) => {
+            applyTheme(event.target.value);
+        });
+
+        document.querySelectorAll('[data-module-toggle]').forEach((input) => {
+            input.addEventListener('change', () => {
+                withConsoleReady((instance) => {
+                    const key = input.getAttribute('data-module-toggle');
+                    instance.features[key] = input.checked;
+                    instance.applyFeatureToggles();
+                });
+            });
+        });
+
+        document.querySelectorAll('[data-metric-toggle]').forEach((input) => {
+            input.addEventListener('change', () => {
+                withConsoleReady((instance) => {
+                    const key = input.getAttribute('data-metric-toggle');
+                    instance.systemMetrics[key] = input.checked;
+                    instance.applySystemMetricToggles();
+                });
+            });
+        });
+
+        document.querySelectorAll('input[name="fab"]').forEach((input) => {
+            input.addEventListener('change', () => {
+                if (!input.checked) return;
+                withConsoleReady((instance) => {
+                    instance.options.floatingButtonPosition = input.value;
+                    const fab = document.getElementById('con5013-fab');
+                    if (fab) {
+                        fab.className = `con5013-fab ${input.value}`;
+                    }
+                });
+            });
+        });
+
+        document.getElementById('fab-visibility').addEventListener('change', (event) => {
+            withConsoleReady((instance) => {
+                instance.options.autoFloatingButton = event.target.checked;
+                const fab = document.getElementById('con5013-fab');
+                if (event.target.checked) {
+                    if (!fab) {
+                        instance.createFloatingButton();
+                    } else {
+                        fab.style.display = '';
+                    }
+                } else if (fab) {
+                    fab.style.display = 'none';
+                }
+            });
+        });
+
+        document.getElementById('open-default').addEventListener('click', () => {
+            openCon5013Console();
+        });
+        document.getElementById('open-logs').addEventListener('click', () => {
+            openCon5013Console({ tab: 'logs' });
+        });
+        document.getElementById('open-terminal').addEventListener('click', () => {
+            openCon5013Console({ tab: 'terminal', command: 'demo:insight', previewDelay: 260 });
+        });
+        document.getElementById('open-api').addEventListener('click', () => {
+            openCon5013Console({ tab: 'api' });
+        });
+
+        document.getElementById('generate-logs').addEventListener('click', async () => {
+            const button = document.getElementById('generate-logs');
+            button.disabled = true;
+            try {
+                await fetch('/demo/log-burst', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ count: 6 })
+                });
+            } finally {
+                button.disabled = false;
+            }
+        });
+
+        withConsoleReady((instance) => {
+            applyTheme(document.getElementById('theme-select').value);
+            syncModuleToggles(instance);
+            syncMetricToggles(instance);
+        });
+
+        // Initial theme preview for first render.
+        applyTheme(document.getElementById('theme-select').value);
+    </script>
+</body>
+</html>
+"""
+
+
+if __name__ == "__main__":
+    application = create_app()
+    application.run(debug=True, port=5003)
