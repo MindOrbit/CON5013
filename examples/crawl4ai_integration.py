@@ -1255,8 +1255,14 @@ def home():
                     if (typeof overlay.executeCommand === 'function') {
                         overlay.executeCommand();
                     } else {
-                        terminalInput.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter' }));
+                        terminalInput.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', bubbles: true }));
                     }
+
+                    setTimeout(() => {
+                        if (terminalInput.value) {
+                            terminalInput.value = '';
+                        }
+                    }, 200);
 
                     terminalInput.focus();
                     return true;
@@ -1350,17 +1356,23 @@ def home():
                         const normalizedUrl = /^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`;
                         const modeValue = modeSelect ? modeSelect.value : 'markdown';
 
-                        if (!overlayReady) {
-                            setFeedback('Initializing the Con5013 console… please retry in a moment.', 'warning');
+                        const overlay = ensureOverlay();
+                        if (!overlay) {
+                            setFeedback('Con5013 console is still loading… please retry shortly.', 'warning');
                             tryHookOverlay();
                             return;
                         }
 
+                        if (!overlayReady) {
+                            tryHookOverlay();
+                        }
+
                         setFeedback(`Launching crawl for ${normalizedUrl}. Watch the terminal for output.`, 'info');
-                        const overlay = ensureOverlay();
                         const executed = runCrawlFromForm(overlay, normalizedUrl, modeValue);
                         if (executed) {
                             setFeedback(`Sent crawl4ai-run for ${normalizedUrl}. Check the Con5013 terminal for the LLM-friendly output.`, 'success');
+                        } else {
+                            setFeedback('Failed to launch the crawl. Open the console manually and try again.', 'error');
                         }
                     });
                 }
