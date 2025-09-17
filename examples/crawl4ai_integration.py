@@ -1124,6 +1124,12 @@ def home():
                         <button type="button" class="btn" data-con5013-button id="custom-con5013-button">
                             Open Con5013 Console
                         </button>
+                        <button type="button" onclick="openCon5013Console({tab: 'system'});" class="btn" data-con5013-button id="custom-con5013-button">
+                            Open Con5013 Function
+                        </button>
+                        <button type="button" onclick="openCon5013Console({tab: 'terminal', command: "python 1+2"});" class="btn" data-con5013-button id="custom-con5013-button">
+                            Open Con5013 Execution
+                        </button>
                         <p class="crawl-demo-hint">
                             Prefer a manual peek? Use this button to toggle the embedded Con5013 overlay.
                         </p>
