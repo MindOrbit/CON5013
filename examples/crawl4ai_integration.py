@@ -921,6 +921,80 @@ def home():
                 letter-spacing: 0.02em;
             }
             .panel p { color: rgba(226, 232, 240, 0.8); line-height: 1.6; }
+            .crawl-demo {
+                margin-top: 28px;
+                padding: 20px;
+                background: rgba(15, 23, 42, 0.55);
+                border: 1px solid rgba(148, 163, 184, 0.1);
+                border-radius: 16px;
+                display: flex;
+                flex-direction: column;
+                gap: 16px;
+            }
+            .crawl-demo h2 {
+                margin: 0;
+                font-size: 1.4rem;
+                letter-spacing: 0.01em;
+            }
+            .crawl-demo-form {
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+            }
+            .crawl-demo-inputs {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 12px;
+            }
+            .crawl-demo-inputs input[type="url"] {
+                flex: 1 1 240px;
+                min-width: 200px;
+                padding: 12px 16px;
+                border-radius: 12px;
+                border: 1px solid rgba(148, 163, 184, 0.25);
+                background: rgba(15, 23, 42, 0.8);
+                color: #f8fafc;
+                font-size: 1rem;
+                transition: border-color 0.2s ease, box-shadow 0.2s ease;
+            }
+            .crawl-demo-inputs input[type="url"]:focus {
+                outline: none;
+                border-color: rgba(94, 234, 212, 0.6);
+                box-shadow: 0 0 0 2px rgba(94, 234, 212, 0.2);
+            }
+            .crawl-demo-inputs select {
+                flex: 0 0 auto;
+                min-width: 160px;
+                padding: 12px 16px;
+                border-radius: 12px;
+                border: 1px solid rgba(148, 163, 184, 0.25);
+                background: rgba(15, 23, 42, 0.8);
+                color: #e2e8f0;
+                font-size: 0.95rem;
+            }
+            .crawl-demo-inputs .btn {
+                flex: 0 0 auto;
+                white-space: nowrap;
+            }
+            .crawl-demo-hint {
+                margin: 0;
+                font-size: 0.9rem;
+                color: rgba(148, 163, 184, 0.85);
+            }
+            .crawl-demo-feedback {
+                margin: 0;
+                font-size: 0.95rem;
+                border-radius: 12px;
+                padding: 12px 16px;
+                background: rgba(148, 163, 184, 0.12);
+                color: #e2e8f0;
+                display: none;
+            }
+            .crawl-demo-feedback.active { display: block; }
+            .crawl-demo-feedback.info { background: rgba(56, 189, 248, 0.18); color: #e0f2fe; }
+            .crawl-demo-feedback.success { background: rgba(34, 197, 94, 0.2); color: #dcfce7; }
+            .crawl-demo-feedback.warning { background: rgba(234, 179, 8, 0.2); color: #fef3c7; }
+            .crawl-demo-feedback.error { background: rgba(248, 113, 113, 0.22); color: #fee2e2; }
             .availability {
                 display: inline-flex;
                 align-items: center;
@@ -1037,6 +1111,23 @@ def home():
                             <span class="metric-value" id="metric-success">0%</span>
                         </div>
                     </div>
+                    <div class="crawl-demo">
+                        <h2>Instant Crawl Demo</h2>
+                        <p class="crawl-demo-hint">Paste a URL and let Con5013 launch Crawl4AI for an LLM-ready summary.</p>
+                        <form id="crawl-demo-form" class="crawl-demo-form">
+                            <div class="crawl-demo-inputs">
+                                <input id="crawl-demo-url" type="url" name="url" placeholder="https://example.com/article" autocomplete="url" required>
+                                <select id="crawl-demo-mode" name="mode" aria-label="Crawl output mode">
+                                    <option value="markdown" selected>LLM markdown</option>
+                                    <option value="clean-html">Clean HTML</option>
+                                    <option value="links">Link summary</option>
+                                </select>
+                                <button type="submit" class="btn">Crawl with Con5013</button>
+                            </div>
+                            <p class="crawl-demo-hint">Tip: We'll open the terminal tab and run <code>crawl4ai-run</code> for you.</p>
+                            <p id="crawl-demo-feedback" class="crawl-demo-feedback" role="status" aria-live="polite"></p>
+                        </form>
+                    </div>
                 </div>
                 <div class="panel">
                     <h2>Real-time Actions</h2>
@@ -1069,12 +1160,13 @@ def home():
                 <h2>Terminal Playground</h2>
                 <p>Open the Con5013 terminal and try these Crawl4AI-aware commands:</p>
                 <ul>
-                    <li><code>crawl4ai-run https://example.org/news --profile headlines</code></li>
-                    <li><code>crawl4ai-run --fail</code> &mdash; queues a job that will fail for log testing.</li>
+                    <li><code>crawl4ai-run https://example.org/news --mode markdown --profile headlines</code></li>
+                    <li><code>crawl4ai-run --simulate --fail</code> &mdash; queues a job that will fail for log testing.</li>
                     <li><code>crawl4ai-jobs 5</code> to stream the latest job statuses.</li>
                     <li><code>crawl4ai-errors</code> to tail the error channel that powers the Logs tab.</li>
                     <li><code>crawl4ai-diagnose Pipeline hiccup</code> to emit a synthetic diagnostic.</li>
                 </ul>
+                <p class="crawl-demo-hint">Prefer clicks? The instant crawl demo above fills and runs the same terminal command for you.</p>
             </div>
 
             <div class="console-hint">
@@ -1112,71 +1204,166 @@ def home():
 
         <script>
             document.addEventListener('DOMContentLoaded', () => {
-                const tryHookOverlay = () => {
+                const form = document.getElementById('crawl-demo-form');
+                const urlInput = document.getElementById('crawl-demo-url');
+                const modeSelect = document.getElementById('crawl-demo-mode');
+                const feedbackEl = document.getElementById('crawl-demo-feedback');
+
+                let overlayReady = false;
+                let logsPinned = false;
+
+                const setFeedback = (message, status = 'info') => {
+                    if (!feedbackEl) {
+                        return;
+                    }
+                    feedbackEl.textContent = message || '';
+                    feedbackEl.className = `crawl-demo-feedback ${status} ${message ? 'active' : ''}`.trim();
+                };
+
+                const ensureOverlay = () => {
                     if (!window.con5013Overlay || typeof window.con5013Overlay.refreshLogs !== 'function') {
+                        return null;
+                    }
+                    return window.con5013Overlay;
+                };
+
+                const runCrawlFromForm = (overlay, normalizedUrl, modeValue) => {
+                    if (!overlay) {
                         return false;
                     }
-                    const overlay = window.con5013Overlay;
-                    const errorLevel = 'ERROR';
-                    overlay.currentSource = 'crawl4ai';
-                    overlay.refreshLogs = async function () {
-                        try {
-                            const response = await fetch(`${this.config.CON5013_URL_PREFIX}/api/logs?source=${encodeURIComponent(this.currentSource)}&level=${errorLevel}`);
-                            const data = await response.json();
-                            const container = document.getElementById('logContainer');
-                            if (!container) {
-                                return;
-                            }
-                            container.innerHTML = '';
-                            if (data.status === 'success' && Array.isArray(data.logs) && data.logs.length) {
-                                data.logs.forEach((log) => {
-                                    const entry = document.createElement('div');
-                                    entry.className = 'log-entry error';
-                                    const ts = log.timestamp ? new Date(log.timestamp * 1000).toLocaleTimeString() : '';
-                                    entry.textContent = `${ts} [${(log.level || 'ERROR').toUpperCase()}] ${log.message}`;
-                                    container.appendChild(entry);
-                                });
-                            } else {
-                                const empty = document.createElement('div');
-                                empty.className = 'log-entry info';
-                                empty.textContent = 'No Crawl4AI errors detected. Trigger a failing job to populate this view.';
-                                container.appendChild(empty);
-                            }
-                            container.scrollTop = container.scrollHeight;
-                        } catch (error) {
-                            console.error('Failed to refresh Crawl4AI logs', error);
-                        }
-                    };
 
-                    const sourceSelect = document.getElementById('logSourceSel');
-                    if (sourceSelect) {
-                        const enforceSelection = () => {
-                            const options = Array.from(sourceSelect.options || []);
-                            const hasCrawl4AI = options.some((option) => option.value === 'crawl4ai');
-                            if (hasCrawl4AI) {
-                                sourceSelect.value = 'crawl4ai';
-                                overlay.currentSource = 'crawl4ai';
-                            }
-                        };
-                        enforceSelection();
-                        const observer = new MutationObserver(enforceSelection);
-                        observer.observe(sourceSelect, { childList: true });
-                        sourceSelect.addEventListener('change', () => {
-                            sourceSelect.value = 'crawl4ai';
-                            overlay.currentSource = 'crawl4ai';
-                            overlay.refreshLogs();
-                        });
+                    if (typeof overlay.open === 'function') {
+                        overlay.open();
                     }
 
-                    overlay.refreshLogs();
+                    if (typeof overlay.switchPanel === 'function') {
+                        overlay.switchPanel('terminal');
+                    } else {
+                        const terminalTab = document.querySelector('[data-panel="terminal"]');
+                        terminalTab?.click();
+                    }
+
+                    const terminalInput = document.getElementById('terminalInput');
+                    if (!terminalInput) {
+                        setFeedback('Terminal input is still loading. Open the console manually and try again.', 'error');
+                        return false;
+                    }
+
+                    const command = `crawl4ai-run ${JSON.stringify(normalizedUrl)} --mode ${modeValue || 'markdown'}`;
+                    terminalInput.value = command;
+
+                    if (typeof overlay.executeCommand === 'function') {
+                        overlay.executeCommand();
+                    } else {
+                        terminalInput.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter' }));
+                    }
+
+                    terminalInput.focus();
                     return true;
                 };
 
-                const interval = setInterval(() => {
-                    if (tryHookOverlay()) {
-                        clearInterval(interval);
+                const tryHookOverlay = () => {
+                    const overlay = ensureOverlay();
+                    if (!overlay) {
+                        return false;
                     }
-                }, 250);
+
+                    if (!logsPinned) {
+                        const errorLevel = 'ERROR';
+                        overlay.currentSource = 'crawl4ai';
+                        overlay.refreshLogs = async function () {
+                            try {
+                                const response = await fetch(`${this.config.CON5013_URL_PREFIX}/api/logs?source=${encodeURIComponent(this.currentSource)}&level=${errorLevel}`);
+                                const data = await response.json();
+                                const container = document.getElementById('logContainer');
+                                if (!container) {
+                                    return;
+                                }
+                                container.innerHTML = '';
+                                if (data.status === 'success' && Array.isArray(data.logs) && data.logs.length) {
+                                    data.logs.forEach((log) => {
+                                        const entry = document.createElement('div');
+                                        entry.className = 'log-entry error';
+                                        const ts = log.timestamp ? new Date(log.timestamp * 1000).toLocaleTimeString() : '';
+                                        entry.textContent = `${ts} [${(log.level || 'ERROR').toUpperCase()}] ${log.message}`;
+                                        container.appendChild(entry);
+                                    });
+                                } else {
+                                    const empty = document.createElement('div');
+                                    empty.className = 'log-entry info';
+                                    empty.textContent = 'No Crawl4AI errors detected. Trigger a failing job to populate this view.';
+                                    container.appendChild(empty);
+                                }
+                                container.scrollTop = container.scrollHeight;
+                            } catch (error) {
+                                console.error('Failed to refresh Crawl4AI logs', error);
+                            }
+                        };
+
+                        const sourceSelect = document.getElementById('logSourceSel');
+                        if (sourceSelect && !sourceSelect.dataset.crawl4aiPinned) {
+                            const enforceSelection = () => {
+                                const options = Array.from(sourceSelect.options || []);
+                                const hasCrawl4AI = options.some((option) => option.value === 'crawl4ai');
+                                if (hasCrawl4AI) {
+                                    sourceSelect.value = 'crawl4ai';
+                                    overlay.currentSource = 'crawl4ai';
+                                }
+                            };
+                            enforceSelection();
+                            const observer = new MutationObserver(enforceSelection);
+                            observer.observe(sourceSelect, { childList: true });
+                            sourceSelect.addEventListener('change', () => {
+                                sourceSelect.value = 'crawl4ai';
+                                overlay.currentSource = 'crawl4ai';
+                                overlay.refreshLogs();
+                            });
+                            sourceSelect.dataset.crawl4aiPinned = 'true';
+                        }
+
+                        overlay.refreshLogs();
+                        logsPinned = true;
+                    }
+
+                    overlayReady = true;
+                    return true;
+                };
+
+                if (!tryHookOverlay()) {
+                    const interval = setInterval(() => {
+                        if (tryHookOverlay()) {
+                            clearInterval(interval);
+                        }
+                    }, 250);
+                }
+
+                if (form) {
+                    form.addEventListener('submit', (event) => {
+                        event.preventDefault();
+                        const rawUrl = urlInput ? urlInput.value.trim() : '';
+                        if (!rawUrl) {
+                            setFeedback('Enter a URL to crawl.', 'warning');
+                            urlInput?.focus();
+                            return;
+                        }
+
+                        const normalizedUrl = /^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`;
+                        const modeValue = modeSelect ? modeSelect.value : 'markdown';
+
+                        if (!overlayReady) {
+                            setFeedback('Initializing the Con5013 console… please retry in a moment.', 'warning');
+                            tryHookOverlay();
+                            return;
+                        }
+
+                        setFeedback(`Launching crawl for ${normalizedUrl}. Watch the terminal for output.`, 'info');
+                        const overlay = ensureOverlay();
+                        const executed = runCrawlFromForm(overlay, normalizedUrl, modeValue);
+                        if (executed) {
+                            setFeedback(`Sent crawl4ai-run for ${normalizedUrl}. Check the Con5013 terminal for the LLM-friendly output.`, 'success');
+                        }
+                    });
+                }
             });
         </script>
     </body>
