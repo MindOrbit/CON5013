@@ -85,6 +85,38 @@ If your page already has its own button, add the attribute below and it will tog
 <button data-con5013-button>Open Con5013</button>
 ```
 
+### Programmatic launcher & terminal automation
+
+Need to open the console from your own scripts? Call the globally available helper once `con5013.js` has loaded:
+
+```js
+openCon5013Console({ tab: 'terminal' });
+```
+
+The helper waits for the console to finish booting before opening the overlay. You can target a specific tab (`logs`, `terminal`, `api`, or `system`) and even execute a command automatically on the terminal tab:
+
+```js
+openCon5013Console({
+  tab: 'terminal',
+  command: "python crawler.py --profile demo"
+});
+```
+
+When a command is provided, the helper will:
+
+- switch to the Terminal tab,
+- paste the command into the "Enter command…" box,
+- run it immediately, and
+- clear the input 200 ms after execution to avoid accidental re-runs.
+
+Optional extras:
+
+- `previewDelay` (ms) — wait before executing to keep the command visible momentarily.
+- `clearDelay` (ms) — customise how long the command stays visible after running (default `200`).
+- `inputTimeout` (ms) — control how long to wait for the terminal input to appear (default `4000`).
+
+An alias `launchCon5013Console(...)` is also exposed for convenience. Both helpers return a promise that resolves with the console instance, so you can chain further interactions if needed.
+
 ### Hide or reposition the floating button
 
 - Disable FAB on a specific page:
