@@ -1953,6 +1953,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const options = { ...derived, ...explicit };
     con5013 = new Con5013Console(options);
+
+    try {
+        if (typeof window !== 'undefined') {
+            window.con5013 = con5013;
+            // Backwards compatibility shim for legacy integrations
+            if (!window.con5013Overlay) {
+                window.con5013Overlay = con5013;
+            }
+            window.Con5013Console = Con5013Console;
+        }
+    } catch (err) {
+        console.warn('Con5013: unable to expose console globally', err);
+    }
 });
 
 // Export for module systems
