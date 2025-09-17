@@ -169,7 +169,7 @@ def register_routes(app: Flask) -> None:
     def index():
         html = render_template_string(
             LANDING_TEMPLATE,
-            theme_presets=json.dumps(THEME_PRESETS, indent=2),
+            theme_presets=THEME_PRESETS,
             server_config_snippet=textwrap.dedent(
                 """
                 from con5013 import Con5013
@@ -481,7 +481,7 @@ LANDING_TEMPLATE = """
                     <h3>Theme playground</h3>
                     <p>Switch presets to rewrite the CSS variables that power <code>con5013.css</code>. The overlay updates instantly.</p>
                     <select id="theme-select">
-                        {% for name in theme_presets | fromjson | list %}
+                        {% for name, _ in theme_presets | dictsort %}
                         <option value="{{ name }}">{{ name }}</option>
                         {% endfor %}
                     </select>
@@ -584,7 +584,7 @@ LANDING_TEMPLATE = """
     </script>
     <script src="/con5013/static/js/con5013.js" data-con5013-hotkey="Alt+C"></script>
     <script>
-        const themePresets = {{ theme_presets | safe }};
+        const themePresets = {{ theme_presets | tojson }};
 
         function renderThemePreview(presetName) {
             const preview = document.getElementById('theme-preview');
