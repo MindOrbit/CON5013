@@ -537,20 +537,30 @@ class TerminalEngine:
         def crawl4ai_test_command(args):
             """Test Crawl4AI functionality."""
             try:
-                from crawl4ai import WebCrawler
-                
-                url = args[0] if args else "https://example.com"
-                
-                # This would be a simple test - in real implementation,
-                # you'd want to make this async and show progress
-                return {
-                    'output': f"Testing Crawl4AI with URL: {url}\\n(This is a demo - real implementation would crawl the URL)",
-                    'type': 'text'
-                }
+                import crawl4ai  # type: ignore
             except ImportError:
                 return {
                     'output': "Crawl4AI not available",
                     'type': 'error'
+                }
+            try:
+                if hasattr(crawl4ai, 'AsyncWebCrawler'):
+                    runtime_name = 'AsyncWebCrawler'
+                elif hasattr(crawl4ai, 'WebCrawler'):
+                    runtime_name = 'WebCrawler'
+                else:
+                    raise AttributeError('No supported crawler runtime found')
+
+                url = args[0] if args else "https://example.com"
+
+                # This would be a simple test - in real implementation,
+                # you'd want to make this async and show progress
+                return {
+                    'output': (
+                        f"Testing Crawl4AI ({runtime_name}) with URL: {url}\\n"
+                        "(This is a demo - real implementation would crawl the URL)"
+                    ),
+                    'type': 'text'
                 }
             except Exception as e:
                 return {
