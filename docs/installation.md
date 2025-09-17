@@ -23,9 +23,17 @@ pip install con5013
 ```bash
 # Enable Crawl4AI enhancements
 pip install "con5013[crawl4ai]"
+python -m playwright install  # download required browser binaries
 
 # Install all optional realtime dependencies
 pip install "con5013[full]"
+```
+
+If `python -m playwright install` reports that the module is missing, install Playwright first:
+
+```bash
+pip install playwright
+python -m playwright install
 ```
 
 ### Install from source

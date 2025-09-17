@@ -5,6 +5,7 @@ import asyncio
 import contextlib
 import logging
 import random
+import sys
 import threading
 import time
 from collections import deque
@@ -616,9 +617,17 @@ if console.terminal_engine:
                 root_cause = exc.__cause__ or exc
                 if exc.args and exc.args[0] == "__crawler_init__":
                     logger.exception("Failed to initialize AsyncWebCrawler", exc_info=root_cause)
+                    python_cmd = (
+                        f"{sys.executable} -m playwright install"
+                        if sys.executable
+                        else "python -m playwright install"
+                    )
                     lines = messages + [
-                        "Unable to initialize Crawl4AI AsyncWebCrawler."
-                        " Try installing optional browser dependencies.",
+                        "Unable to initialize Crawl4AI AsyncWebCrawler.",
+                        " Optional browser dependencies appear to be missing.",
+                        " Install the Playwright browsers by running:",
+                        f"   {python_cmd}",
+                        " If the command is not available, install Playwright first with `pip install playwright`.",
                         f"Error: {root_cause}",
                     ]
                 else:
@@ -638,9 +647,17 @@ if console.terminal_engine:
                 crawler = WebCrawler(always_by_pass_cache=True, verbose=False)
             except Exception as exc:  # pragma: no cover - optional dependency path
                 logger.exception("Failed to initialize WebCrawler", exc_info=exc)
+                python_cmd = (
+                    f"{sys.executable} -m playwright install"
+                    if sys.executable
+                    else "python -m playwright install"
+                )
                 lines = messages + [
-                    "Unable to initialize Crawl4AI WebCrawler."
-                    " Try installing optional browser dependencies.",
+                    "Unable to initialize Crawl4AI WebCrawler.",
+                    " Optional browser dependencies appear to be missing.",
+                    " Install the Playwright browsers by running:",
+                    f"   {python_cmd}",
+                    " If the command is not available, install Playwright first with `pip install playwright`.",
                     f"Error: {exc}",
                 ]
                 return {"output": "\n".join(filter(None, lines)), "type": "text"}

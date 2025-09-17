@@ -217,6 +217,13 @@ You can install Con5013 from PyPI for the latest stable release or directly from
 ```bash
 # Latest stable release from PyPI
 pip install con5013
+
+# Enable Crawl4AI integration and its browser runtime
+pip install "con5013[crawl4ai]"
+python -m playwright install  # downloads the Chromium binary used by Crawl4AI
+
+# If the command above fails, ensure Playwright is installed first:
+# pip install playwright
 ```
 
 ```bash
