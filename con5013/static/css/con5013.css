@@ -256,32 +256,51 @@
 }
 
 /* Terminal Section */
+
 .con5013-terminal {
     background: var(--con5013-darker);
     border: 1px solid var(--con5013-border);
-    border-radius: 8px;
+    border-radius: 12px;
     padding: 16px;
     font-family: 'Courier New', monospace;
     font-size: 13px;
-    /* Let terminal grow with content; rely on outer tab scroll */
-    /* height: 400px; */
     display: flex;
     flex-direction: column;
+    position: relative;
+    --con5013-terminal-input-height: 72px;
+    --con5013-terminal-input-gap: 18px;
 }
 
 .con5013-terminal-output {
     flex: 1;
-    /* Avoid inner scroll; allow content to expand */
-    overflow-y: visible;
-    margin-bottom: 16px;
+    overflow-y: auto;
+    margin-bottom: 0;
     color: var(--con5013-text);
     line-height: 1.4;
+    padding-right: 4px;
+    scroll-behavior: smooth;
+    padding-bottom: calc(var(--con5013-terminal-input-height) + var(--con5013-terminal-input-gap));
 }
 
 .con5013-terminal-input {
+    position: sticky;
+    bottom: 0;
+    margin-top: var(--con5013-terminal-input-gap);
+    padding: 12px 16px;
     display: flex;
     align-items: flex-start; /* keep prompt aligned to the top line */
     gap: 8px;
+    background: rgba(15, 23, 42, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    box-shadow: 0 20px 45px rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(18px);
+    z-index: 5;
+}
+
+.con5013-terminal-input:focus-within {
+    border-color: rgba(16, 185, 129, 0.65);
+    box-shadow: 0 24px 55px rgba(16, 185, 129, 0.25);
 }
 
 .con5013-terminal-prompt {
