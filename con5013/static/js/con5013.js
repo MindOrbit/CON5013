@@ -587,6 +587,7 @@ class Con5013Console {
                 const minPx = Math.ceil(lh + pad);
                 const desired = Math.max(minPx, Math.min(terminalInput.scrollHeight, maxPx));
                 terminalInput.style.height = desired + 'px';
+                this.updateTerminalInputMetrics();
             };
             terminalInput.addEventListener('input', autoResize);
             // Initialize height
@@ -613,6 +614,8 @@ class Con5013Console {
                 }
             });
         }
+
+        window.addEventListener('resize', () => this.updateTerminalInputMetrics());
         
         // Logs scroll pause/resume
         const logsContainer = document.getElementById('con5013-logs');
@@ -972,6 +975,7 @@ class Con5013Console {
         if (targetTab === 'terminal') {
             setTimeout(() => {
                 document.getElementById('con5013-terminal-command')?.focus();
+                this.updateTerminalInputMetrics();
             }, 100);
         } else if (targetTab === 'system') {
             this.refreshSystemStats();
@@ -1146,9 +1150,10 @@ class Con5013Console {
         const inputEl = document.getElementById('con5013-terminal-command');
         if (inputEl) {
             inputEl.style.height = 'auto';
+            this.updateTerminalInputMetrics();
         }
     }
-    
+
     addTerminalOutput(text, type = 'text') {
         const output = document.getElementById('con5013-terminal-output');
         if (!output) return;
@@ -1194,6 +1199,19 @@ class Con5013Console {
 
         output.appendChild(block);
         output.scrollTop = output.scrollHeight;
+    }
+
+    updateTerminalInputMetrics() {
+        const containers = document.querySelectorAll('.con5013-terminal');
+        containers.forEach((container) => {
+            const inputWrapper = container.querySelector('.con5013-terminal-input');
+            if (!inputWrapper || inputWrapper.offsetParent === null) return;
+            const styles = window.getComputedStyle(inputWrapper);
+            const marginTop = parseFloat(styles.marginTop) || 0;
+            const marginBottom = parseFloat(styles.marginBottom) || 0;
+            const total = inputWrapper.offsetHeight + marginTop + marginBottom;
+            container.style.setProperty('--con5013-terminal-input-height', `${Math.ceil(total)}px`);
+        });
     }
 
     // Determine content format using simple hints
