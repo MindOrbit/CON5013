@@ -995,6 +995,15 @@ def home():
             .crawl-demo-feedback.success { background: rgba(34, 197, 94, 0.2); color: #dcfce7; }
             .crawl-demo-feedback.warning { background: rgba(234, 179, 8, 0.2); color: #fef3c7; }
             .crawl-demo-feedback.error { background: rgba(248, 113, 113, 0.22); color: #fee2e2; }
+            .custom-console-launch {
+                margin-top: 20px;
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+            }
+            .custom-console-launch .btn {
+                align-self: flex-start;
+            }
             .availability {
                 display: inline-flex;
                 align-items: center;
@@ -1111,6 +1120,14 @@ def home():
                             <span class="metric-value" id="metric-success">0%</span>
                         </div>
                     </div>
+                    <div class="custom-console-launch">
+                        <button type="button" class="btn" data-con5013-button id="custom-con5013-button">
+                            Open Con5013 Console
+                        </button>
+                        <p class="crawl-demo-hint">
+                            Prefer a manual peek? Use this button to toggle the embedded Con5013 overlay.
+                        </p>
+                    </div>
                     <div class="crawl-demo">
                         <h2>Instant Crawl Demo</h2>
                         <p class="crawl-demo-hint">Paste a URL and let Con5013 launch Crawl4AI for an LLM-ready summary.</p>
@@ -1211,6 +1228,7 @@ def home():
 
                 let overlayReady = false;
                 let logsPinned = false;
+                let hookInFlight = null;
 
                 const setFeedback = (message, status = 'info') => {
                     if (!feedbackEl) {
@@ -1237,10 +1255,182 @@ def home():
                     return document.getElementById('terminalInput') || document.getElementById('con5013-terminal-command');
                 };
 
-                const runCrawlFromForm = (consoleCtx, normalizedUrl, modeValue) => {
-                    if (!consoleCtx) {
-                        return false;
+                const waitFor = (resolver, { timeout = 5000, interval = 120 } = {}) =>
+                    new Promise((resolve, reject) => {
+                        const startTime = Date.now();
+                        const attempt = () => {
+                            try {
+                                const value = resolver();
+                                if (value) {
+                                    resolve(value);
+                                    return;
+                                }
+                            } catch (error) {
+                                // Ignore resolver errors until timeout elapses
+                            }
+                            if (Date.now() - startTime >= timeout) {
+                                reject(new Error('timeout'));
+                                return;
+                            }
+                            setTimeout(attempt, interval);
+                        };
+                        attempt();
+                    });
+
+                const waitForConsole = (timeout = 6000) => waitFor(resolveConsole, { timeout, interval: 150 });
+                const waitForTerminalInput = (kind, timeout = 5000) =>
+                    waitFor(() => findTerminalInput(kind), { timeout, interval: 150 });
+
+                const ensureConsoleHooks = async (providedCtx = null) => {
+                    if (logsPinned && overlayReady) {
+                        return true;
                     }
+                    if (hookInFlight) {
+                        try {
+                            return await hookInFlight;
+                        } catch (_) {
+                            return false;
+                        }
+                    }
+
+                    hookInFlight = (async () => {
+                        const consoleCtx = providedCtx || (await waitForConsole(7000).catch(() => null));
+                        if (!consoleCtx) {
+                            return false;
+                        }
+
+                        const { kind, api } = consoleCtx;
+
+                        if (!logsPinned) {
+                            if (kind === 'legacy') {
+                                const errorLevel = 'ERROR';
+                                api.currentSource = 'crawl4ai';
+                                api.refreshLogs = async function () {
+                                    try {
+                                        const response = await fetch(`${this.config.CON5013_URL_PREFIX}/api/logs?source=${encodeURIComponent(this.currentSource)}&level=${errorLevel}`);
+                                        const data = await response.json();
+                                        const container = document.getElementById('logContainer');
+                                        if (!container) {
+                                            return;
+                                        }
+                                        container.innerHTML = '';
+                                        if (data.status === 'success' && Array.isArray(data.logs) && data.logs.length) {
+                                            data.logs.forEach((log) => {
+                                                const entry = document.createElement('div');
+                                                entry.className = 'log-entry error';
+                                                const ts = log.timestamp ? new Date(log.timestamp * 1000).toLocaleTimeString() : '';
+                                                entry.textContent = `${ts} [${(log.level || 'ERROR').toUpperCase()}] ${log.message}`;
+                                                container.appendChild(entry);
+                                            });
+                                        } else {
+                                            const empty = document.createElement('div');
+                                            empty.className = 'log-entry info';
+                                            empty.textContent = 'No Crawl4AI errors detected. Trigger a failing job to populate this view.';
+                                            container.appendChild(empty);
+                                        }
+                                        container.scrollTop = container.scrollHeight;
+                                    } catch (error) {
+                                        console.error('Failed to refresh Crawl4AI logs', error);
+                                    }
+                                };
+
+                                const sourceSelect = document.getElementById('logSourceSel');
+                                if (sourceSelect && !sourceSelect.dataset.crawl4aiPinned) {
+                                    const enforceSelection = () => {
+                                        const options = Array.from(sourceSelect.options || []);
+                                        const hasCrawl4AI = options.some((option) => option.value === 'crawl4ai');
+                                        if (hasCrawl4AI) {
+                                            sourceSelect.value = 'crawl4ai';
+                                            api.currentSource = 'crawl4ai';
+                                        }
+                                    };
+                                    enforceSelection();
+                                    const observer = new MutationObserver(enforceSelection);
+                                    observer.observe(sourceSelect, { childList: true });
+                                    sourceSelect.addEventListener('change', () => {
+                                        sourceSelect.value = 'crawl4ai';
+                                        api.currentSource = 'crawl4ai';
+                                        api.refreshLogs();
+                                    });
+                                    sourceSelect.dataset.crawl4aiPinned = 'true';
+                                }
+
+                                api.refreshLogs();
+                                logsPinned = true;
+                            } else {
+                                const getSourceSelect = () =>
+                                    document.querySelector('[data-logs-source]') || document.getElementById('con5013-log-source');
+                                const getLevelSelect = () =>
+                                    document.querySelector('[data-logs-level]') || document.getElementById('con5013-log-level');
+
+                                const enforceLogFilters = () => {
+                                    if (api) {
+                                        api.defaultLogSource = 'crawl4ai';
+                                        api.currentLogSource = 'crawl4ai';
+                                        api.currentLogLevel = 'ERROR';
+                                    }
+                                    const sourceSelect = getSourceSelect();
+                                    const levelSelect = getLevelSelect();
+                                    if (sourceSelect) {
+                                        const hasOption = Array.from(sourceSelect.options || []).some((option) => option.value === 'crawl4ai');
+                                        if (hasOption) {
+                                            sourceSelect.value = 'crawl4ai';
+                                        }
+                                    }
+                                    if (levelSelect) {
+                                        levelSelect.value = 'ERROR';
+                                    }
+                                };
+
+                                enforceLogFilters();
+
+                                const sourceSelect = getSourceSelect();
+                                const levelSelect = getLevelSelect();
+
+                                if (sourceSelect && sourceSelect.dataset.crawl4aiPinned !== 'true') {
+                                    sourceSelect.addEventListener('change', () => {
+                                        enforceLogFilters();
+                                        api.refreshLogs?.();
+                                    });
+                                    sourceSelect.dataset.crawl4aiPinned = 'true';
+                                }
+
+                                if (levelSelect && levelSelect.dataset.crawl4aiPinned !== 'true') {
+                                    levelSelect.addEventListener('change', () => {
+                                        enforceLogFilters();
+                                        api.refreshLogs?.();
+                                    });
+                                    levelSelect.dataset.crawl4aiPinned = 'true';
+                                }
+
+                                if (sourceSelect || levelSelect) {
+                                    api.refreshLogs?.();
+                                    logsPinned = true;
+                                }
+                            }
+                        }
+
+                        overlayReady = true;
+                        return logsPinned || overlayReady;
+                    })()
+                        .catch((error) => {
+                            console.warn('Con5013: unable to prepare console hooks yet', error);
+                            return false;
+                        })
+                        .finally(() => {
+                            hookInFlight = null;
+                        });
+
+                    return hookInFlight;
+                };
+
+                const runCrawlFromForm = async (normalizedUrl, modeValue) => {
+                    const consoleCtx = await waitForConsole(7000).catch(() => null);
+                    if (!consoleCtx) {
+                        return { success: false, reason: 'console-timeout' };
+                    }
+
+                    await ensureConsoleHooks(consoleCtx);
 
                     const { kind, api } = consoleCtx;
 
@@ -1254,38 +1444,38 @@ def home():
                         } else {
                             document.querySelector('[data-tab="terminal"]')?.click();
                         }
+                    } else if (typeof api.switchPanel === 'function') {
+                        api.switchPanel('terminal');
                     } else {
-                        if (typeof api.switchPanel === 'function') {
-                            api.switchPanel('terminal');
-                        } else {
-                            const terminalTab = document.querySelector('[data-panel="terminal"]');
-                            terminalTab?.click();
-                        }
+                        document.querySelector('[data-panel="terminal"]')?.click();
                     }
 
-                    const terminalInput = findTerminalInput(kind);
+                    const terminalInput = await waitForTerminalInput(kind, 5000).catch(() => null);
                     if (!terminalInput) {
-                        setFeedback('Terminal input is still loading. Open the console manually and try again.', 'error');
-                        return false;
+                        return { success: false, reason: 'terminal-missing' };
                     }
 
                     const command = `crawl4ai-run ${JSON.stringify(normalizedUrl)} --mode ${modeValue || 'markdown'}`;
                     terminalInput.value = command;
+                    terminalInput.dispatchEvent(new Event('input', { bubbles: true }));
 
-                    if (kind === 'modern') {
-                        if (typeof api.executeTerminalCommand === 'function') {
-                            api.executeTerminalCommand(command);
+                    try {
+                        if (kind === 'modern') {
+                            if (typeof api.executeTerminalCommand === 'function') {
+                                await api.executeTerminalCommand(command);
+                            } else if (typeof api.executeCommand === 'function') {
+                                await api.executeCommand(command);
+                            } else {
+                                terminalInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+                            }
                         } else if (typeof api.executeCommand === 'function') {
-                            api.executeCommand(command);
-                        } else {
-                            terminalInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-                        }
-                    } else {
-                        if (typeof api.executeCommand === 'function') {
-                            api.executeCommand();
+                            await api.executeCommand();
                         } else {
                             terminalInput.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', bubbles: true }));
                         }
+                    } catch (error) {
+                        console.warn('Con5013 crawl command failed', error);
+                        return { success: false, reason: 'execution-error', error };
                     }
 
                     setTimeout(() => {
@@ -1296,137 +1486,11 @@ def home():
                     }, 200);
 
                     terminalInput.focus();
-                    return true;
+                    return { success: true };
                 };
-
-                const tryHookConsole = () => {
-                    const consoleCtx = resolveConsole();
-                    if (!consoleCtx) {
-                        return false;
-                    }
-
-                    const { kind, api } = consoleCtx;
-
-                    if (!logsPinned) {
-                        if (kind === 'legacy') {
-                            const errorLevel = 'ERROR';
-                            api.currentSource = 'crawl4ai';
-                            api.refreshLogs = async function () {
-                                try {
-                                    const response = await fetch(`${this.config.CON5013_URL_PREFIX}/api/logs?source=${encodeURIComponent(this.currentSource)}&level=${errorLevel}`);
-                                    const data = await response.json();
-                                    const container = document.getElementById('logContainer');
-                                    if (!container) {
-                                        return;
-                                    }
-                                    container.innerHTML = '';
-                                    if (data.status === 'success' && Array.isArray(data.logs) && data.logs.length) {
-                                        data.logs.forEach((log) => {
-                                            const entry = document.createElement('div');
-                                            entry.className = 'log-entry error';
-                                            const ts = log.timestamp ? new Date(log.timestamp * 1000).toLocaleTimeString() : '';
-                                            entry.textContent = `${ts} [${(log.level || 'ERROR').toUpperCase()}] ${log.message}`;
-                                            container.appendChild(entry);
-                                        });
-                                    } else {
-                                        const empty = document.createElement('div');
-                                        empty.className = 'log-entry info';
-                                        empty.textContent = 'No Crawl4AI errors detected. Trigger a failing job to populate this view.';
-                                        container.appendChild(empty);
-                                    }
-                                    container.scrollTop = container.scrollHeight;
-                                } catch (error) {
-                                    console.error('Failed to refresh Crawl4AI logs', error);
-                                }
-                            };
-
-                            const sourceSelect = document.getElementById('logSourceSel');
-                            if (sourceSelect && !sourceSelect.dataset.crawl4aiPinned) {
-                                const enforceSelection = () => {
-                                    const options = Array.from(sourceSelect.options || []);
-                                    const hasCrawl4AI = options.some((option) => option.value === 'crawl4ai');
-                                    if (hasCrawl4AI) {
-                                        sourceSelect.value = 'crawl4ai';
-                                        api.currentSource = 'crawl4ai';
-                                    }
-                                };
-                                enforceSelection();
-                                const observer = new MutationObserver(enforceSelection);
-                                observer.observe(sourceSelect, { childList: true });
-                                sourceSelect.addEventListener('change', () => {
-                                    sourceSelect.value = 'crawl4ai';
-                                    api.currentSource = 'crawl4ai';
-                                    api.refreshLogs();
-                                });
-                                sourceSelect.dataset.crawl4aiPinned = 'true';
-                            }
-
-                            api.refreshLogs();
-                            logsPinned = true;
-                        } else {
-                            const sourceSelect = document.getElementById('con5013-log-source');
-                            const levelSelect = document.getElementById('con5013-log-level');
-
-                            const enforceLogFilters = () => {
-                                if (api) {
-                                    api.defaultLogSource = 'crawl4ai';
-                                    api.currentLogSource = 'crawl4ai';
-                                    api.currentLogLevel = 'ERROR';
-                                }
-                                if (sourceSelect) {
-                                    const hasOption = Array.from(sourceSelect.options || []).some((option) => option.value === 'crawl4ai');
-                                    if (hasOption) {
-                                        sourceSelect.value = 'crawl4ai';
-                                    }
-                                }
-                                if (levelSelect) {
-                                    levelSelect.value = 'ERROR';
-                                }
-                            };
-
-                            enforceLogFilters();
-
-                            if (sourceSelect && !sourceSelect.dataset.crawl4aiPinned) {
-                                const observer = new MutationObserver(enforceLogFilters);
-                                observer.observe(sourceSelect, { childList: true });
-                                sourceSelect.addEventListener('change', () => {
-                                    enforceLogFilters();
-                                    api.refreshLogs?.();
-                                });
-                                sourceSelect.dataset.crawl4aiPinned = 'true';
-                            }
-
-                            if (levelSelect && !levelSelect.dataset.crawl4aiPinned) {
-                                levelSelect.addEventListener('change', () => {
-                                    enforceLogFilters();
-                                    api.refreshLogs?.();
-                                });
-                                levelSelect.dataset.crawl4aiPinned = 'true';
-                            }
-
-                            if (!sourceSelect && !levelSelect) {
-                                return false;
-                            }
-
-                            api.refreshLogs?.();
-                            logsPinned = true;
-                        }
-                    }
-
-                    overlayReady = true;
-                    return true;
-                };
-
-                if (!tryHookConsole()) {
-                    const interval = setInterval(() => {
-                        if (tryHookConsole()) {
-                            clearInterval(interval);
-                        }
-                    }, 250);
-                }
 
                 if (form) {
-                    form.addEventListener('submit', (event) => {
+                    form.addEventListener('submit', async (event) => {
                         event.preventDefault();
                         const rawUrl = urlInput ? urlInput.value.trim() : '';
                         if (!rawUrl) {
@@ -1438,26 +1502,35 @@ def home():
                         const normalizedUrl = /^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`;
                         const modeValue = modeSelect ? modeSelect.value : 'markdown';
 
-                        const consoleCtx = resolveConsole();
-                        if (!consoleCtx) {
-                            setFeedback('Con5013 console is still loading… please retry shortly.', 'warning');
-                            tryHookConsole();
+                        setFeedback(`Launching crawl for ${normalizedUrl}. Watch the terminal for output.`, 'info');
+                        const result = await runCrawlFromForm(normalizedUrl, modeValue);
+
+                        if (result.success) {
+                            setFeedback(`Sent crawl4ai-run for ${normalizedUrl}. Check the Con5013 terminal for the LLM-friendly output.`, 'success');
                             return;
                         }
 
-                        if (!overlayReady) {
-                            tryHookConsole();
-                        }
-
-                        setFeedback(`Launching crawl for ${normalizedUrl}. Watch the terminal for output.`, 'info');
-                        const executed = runCrawlFromForm(consoleCtx, normalizedUrl, modeValue);
-                        if (executed) {
-                            setFeedback(`Sent crawl4ai-run for ${normalizedUrl}. Check the Con5013 terminal for the LLM-friendly output.`, 'success');
+                        if (result.reason === 'console-timeout') {
+                            setFeedback('Con5013 console is still loading… please retry shortly.', 'warning');
+                            ensureConsoleHooks();
+                        } else if (result.reason === 'terminal-missing') {
+                            setFeedback('Terminal input is still loading. Open the console manually and try again.', 'error');
+                            ensureConsoleHooks();
+                        } else if (result.reason === 'execution-error') {
+                            setFeedback('Failed to run the crawl command. Check the Con5013 terminal output for details.', 'error');
                         } else {
                             setFeedback('Failed to launch the crawl. Open the console manually and try again.', 'error');
                         }
                     });
                 }
+
+                document.querySelectorAll('[data-con5013-button]').forEach((btn) => {
+                    btn.addEventListener('click', () => {
+                        ensureConsoleHooks();
+                    });
+                });
+
+                ensureConsoleHooks();
             });
         </script>
     </body>
