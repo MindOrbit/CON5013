@@ -279,7 +279,7 @@
     line-height: 1.4;
     padding-right: 4px;
     scroll-behavior: smooth;
-    padding-bottom: calc(var(--con5013-terminal-input-height) + var(--con5013-terminal-input-gap));
+    /*padding-bottom: calc(var(--con5013-terminal-input-height) + var(--con5013-terminal-input-gap));*/
 }
 
 .con5013-terminal-input {
