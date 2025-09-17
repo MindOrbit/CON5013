@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Con5013 + Crawl4AI deep integration demo."""
 
+import asyncio
+import contextlib
 import logging
 import random
 import threading
@@ -15,12 +17,18 @@ from flask import Flask, jsonify, render_template_string, request
 from con5013 import Con5013
 
 try:  # pragma: no cover - optional dependency for the live demo
-    from crawl4ai import WebCrawler  # type: ignore
+    from crawl4ai import AsyncWebCrawler, CacheMode, CrawlerRunConfig  # type: ignore
+except Exception:  # pragma: no cover - fallback when API changes
+    AsyncWebCrawler = None  # type: ignore
+    CacheMode = None  # type: ignore
+    CrawlerRunConfig = None  # type: ignore
 
-    CRAWL4AI_AVAILABLE = True
-except Exception:  # pragma: no cover - fallback when package is missing
+try:  # pragma: no cover - optional dependency for legacy versions
+    from crawl4ai import WebCrawler  # type: ignore
+except Exception:  # pragma: no cover - fallback when class is missing
     WebCrawler = None  # type: ignore
-    CRAWL4AI_AVAILABLE = False
+
+CRAWL4AI_AVAILABLE = bool(AsyncWebCrawler or WebCrawler)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -564,27 +572,94 @@ if console.terminal_engine:
                 )
             return {"output": "\n".join(filter(None, message_lines)), "type": "text"}
 
-        try:
-            crawler = WebCrawler(always_by_pass_cache=True, verbose=False)
-        except Exception as exc:  # pragma: no cover - optional dependency path
-            logger.exception("Failed to initialize WebCrawler", exc_info=exc)
-            lines = messages + [
-                "Unable to initialize Crawl4AI WebCrawler."
-                " Try installing optional browser dependencies.",
-                f"Error: {exc}",
-            ]
-            return {"output": "\n".join(filter(None, lines)), "type": "text"}
+        result = None
+        if AsyncWebCrawler is not None:
 
-        try:
-            result = crawler.run(
-                normalized_url,
-                warmup=False,
-                verbose=False,
-            )
-        except Exception as exc:  # pragma: no cover - optional dependency path
-            logger.exception("Crawl4AI run failed", exc_info=exc)
+            def _run_crawl() -> Any:
+                async def _crawl_async():
+                    crawler = AsyncWebCrawler()
+                    try:
+                        try:
+                            await crawler.start()
+                        except Exception as start_exc:
+                            raise RuntimeError("__crawler_init__") from start_exc
+
+                        config_kwargs: Dict[str, Any] = {"verbose": False, "log_console": False}
+                        if CacheMode is not None:
+                            config_kwargs["cache_mode"] = CacheMode.BYPASS
+                        config = (
+                            CrawlerRunConfig(**config_kwargs)
+                            if CrawlerRunConfig is not None
+                            else None
+                        )
+                        if config is not None:
+                            return await crawler.arun(url=normalized_url, config=config)
+                        return await crawler.arun(url=normalized_url)
+                    finally:
+                        with contextlib.suppress(Exception):
+                            await crawler.close()
+
+                loop = asyncio.new_event_loop()
+                try:
+                    asyncio.set_event_loop(loop)
+                    return loop.run_until_complete(_crawl_async())
+                finally:
+                    try:
+                        loop.run_until_complete(loop.shutdown_asyncgens())
+                    finally:
+                        asyncio.set_event_loop(None)
+                        loop.close()
+
+            try:
+                result = _run_crawl()
+            except RuntimeError as exc:  # pragma: no cover - optional dependency path
+                root_cause = exc.__cause__ or exc
+                if exc.args and exc.args[0] == "__crawler_init__":
+                    logger.exception("Failed to initialize AsyncWebCrawler", exc_info=root_cause)
+                    lines = messages + [
+                        "Unable to initialize Crawl4AI AsyncWebCrawler."
+                        " Try installing optional browser dependencies.",
+                        f"Error: {root_cause}",
+                    ]
+                else:
+                    logger.exception("Crawl4AI AsyncWebCrawler run failed", exc_info=root_cause)
+                    lines = messages + [
+                        f"Crawl4AI AsyncWebCrawler failed to crawl {normalized_url}: {root_cause}",
+                    ]
+                return {"output": "\n".join(filter(None, lines)), "type": "text"}
+            except Exception as exc:  # pragma: no cover - optional dependency path
+                logger.exception("Crawl4AI AsyncWebCrawler run failed", exc_info=exc)
+                lines = messages + [
+                    f"Crawl4AI AsyncWebCrawler failed to crawl {normalized_url}: {exc}",
+                ]
+                return {"output": "\n".join(filter(None, lines)), "type": "text"}
+        elif WebCrawler is not None:
+            try:
+                crawler = WebCrawler(always_by_pass_cache=True, verbose=False)
+            except Exception as exc:  # pragma: no cover - optional dependency path
+                logger.exception("Failed to initialize WebCrawler", exc_info=exc)
+                lines = messages + [
+                    "Unable to initialize Crawl4AI WebCrawler."
+                    " Try installing optional browser dependencies.",
+                    f"Error: {exc}",
+                ]
+                return {"output": "\n".join(filter(None, lines)), "type": "text"}
+
+            try:
+                result = crawler.run(
+                    normalized_url,
+                    warmup=False,
+                    verbose=False,
+                )
+            except Exception as exc:  # pragma: no cover - optional dependency path
+                logger.exception("Crawl4AI run failed", exc_info=exc)
+                lines = messages + [
+                    f"Crawl4AI failed to crawl {normalized_url}: {exc}",
+                ]
+                return {"output": "\n".join(filter(None, lines)), "type": "text"}
+        else:
             lines = messages + [
-                f"Crawl4AI failed to crawl {normalized_url}: {exc}",
+                "Crawl4AI runtime is unavailable. Install crawl4ai to enable live crawling.",
             ]
             return {"output": "\n".join(filter(None, lines)), "type": "text"}
 
@@ -1200,14 +1275,20 @@ def crawl4ai_simulate_error():
 def test_crawl4ai():
     """Test Crawl4AI integration availability."""
 
-    if CRAWL4AI_AVAILABLE and WebCrawler is not None:
+    if CRAWL4AI_AVAILABLE:
+        runtime_class = AsyncWebCrawler or WebCrawler
+        runtime_note = (
+            "Use AsyncWebCrawler() within an asyncio event loop to run actual crawls in production."
+            if AsyncWebCrawler is not None
+            else "Instantiate WebCrawler() to run actual crawls in production."
+        )
         return jsonify(
             {
                 "success": True,
                 "message": "Crawl4AI package detected.",
                 "details": {
-                    "webcrawler_class": f"{WebCrawler.__module__}.{WebCrawler.__name__}",
-                    "note": "Instantiate WebCrawler() to run actual crawls in production.",
+                    "runtime_class": f"{runtime_class.__module__}.{runtime_class.__name__}",
+                    "note": runtime_note,
                 },
                 "metrics": crawl4ai_simulator.stats(),
             }
