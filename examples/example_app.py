@@ -33,37 +33,165 @@ THEME_PRESETS: Dict[str, Dict[str, str]] = {
         "--con5013-primary": "#38bdf8",
         "--con5013-secondary": "#818cf8",
         "--con5013-success": "#22c55e",
-        "--con5013-warning": "#f97316",
-        "--con5013-error": "#ef4444",
+        "--con5013-warning": "#facc15",
+        "--con5013-error": "#f472b6",
         "--con5013-dark": "#0f172a",
         "--con5013-darker": "#020617",
+        "--con5013-border": "rgba(56, 189, 248, 0.42)",
+        "--con5013-light": "#f0f9ff",
+        "--con5013-text": "#e0f2fe",
+        "--con5013-text-muted": "#93c5fd",
+        "--con5013-console-bg": "radial-gradient(circle at 18% 12%, rgba(56, 189, 248, 0.35), rgba(8, 47, 73, 0.92) 55%, rgba(2, 6, 23, 0.98))",
+        "--con5013-console-border": "rgba(56, 189, 248, 0.55)",
+        "--con5013-console-shadow": "0 45px 120px -45px rgba(56, 189, 248, 0.65)",
+        "--con5013-console-radius": "28px",
+        "--con5013-console-header-bg": "linear-gradient(135deg, rgba(56, 189, 248, 0.92), rgba(129, 140, 248, 0.92))",
+        "--con5013-console-tabs-bg": "rgba(2, 6, 23, 0.82)",
+        "--con5013-tab-hover-bg": "rgba(56, 189, 248, 0.14)",
+        "--con5013-tab-active-bg": "rgba(129, 140, 248, 0.18)",
+        "--con5013-tab-active-border": "rgba(56, 189, 248, 0.85)",
+        "--con5013-tab-active-color": "#e0f2fe",
+        "--con5013-system-card-bg": "linear-gradient(160deg, rgba(14, 116, 144, 0.85), rgba(30, 64, 175, 0.75))",
+        "--con5013-system-card-border": "rgba(56, 189, 248, 0.45)",
+        "--con5013-system-card-radius": "24px",
+        "--con5013-system-card-shadow": "0 30px 60px -45px rgba(56, 189, 248, 0.7)",
+        "--con5013-api-stats-bg": "linear-gradient(140deg, rgba(15, 118, 110, 0.7), rgba(59, 130, 246, 0.55))",
+        "--con5013-api-stats-border": "rgba(165, 243, 252, 0.45)",
+        "--con5013-api-stats-radius": "22px",
+        "--con5013-api-stats-shadow": "0 24px 60px -48px rgba(59, 130, 246, 0.75)",
+        "--con5013-endpoints-bg": "rgba(8, 47, 73, 0.75)",
+        "--con5013-endpoints-border": "rgba(56, 189, 248, 0.35)",
+        "--con5013-endpoints-radius": "22px",
+        "--con5013-endpoints-shadow": "0 20px 55px -45px rgba(13, 148, 136, 0.6)",
+        "--con5013-endpoint-bg": "rgba(15, 118, 110, 0.18)",
+        "--con5013-endpoint-divider": "rgba(56, 189, 248, 0.25)",
+        "--con5013-terminal-bg": "rgba(8, 47, 73, 0.88)",
+        "--con5013-terminal-border": "rgba(56, 189, 248, 0.35)",
+        "--con5013-terminal-radius": "20px",
+        "--con5013-terminal-shadow": "0 18px 50px -30px rgba(56, 189, 248, 0.45)",
     },
     "Sunset": {
-        "--con5013-primary": "#f59e0b",
-        "--con5013-secondary": "#f97316",
+        "--con5013-primary": "#f97316",
+        "--con5013-secondary": "#fb7185",
         "--con5013-success": "#34d399",
         "--con5013-warning": "#facc15",
-        "--con5013-error": "#fb7185",
-        "--con5013-dark": "#1f2937",
-        "--con5013-darker": "#111827",
+        "--con5013-error": "#f43f5e",
+        "--con5013-dark": "#2a1b1f",
+        "--con5013-darker": "#160b11",
+        "--con5013-border": "rgba(250, 204, 21, 0.45)",
+        "--con5013-light": "#fff7ed",
+        "--con5013-text": "#fde68a",
+        "--con5013-text-muted": "#fbbf24",
+        "--con5013-console-bg": "radial-gradient(circle at 80% 0%, rgba(249, 115, 22, 0.65), rgba(185, 28, 28, 0.85) 45%, rgba(46, 16, 16, 0.95))",
+        "--con5013-console-border": "rgba(249, 115, 22, 0.55)",
+        "--con5013-console-shadow": "0 40px 120px -40px rgba(249, 115, 22, 0.6)",
+        "--con5013-console-radius": "34px",
+        "--con5013-console-header-bg": "linear-gradient(120deg, rgba(249, 115, 22, 0.95), rgba(244, 63, 94, 0.92))",
+        "--con5013-console-tabs-bg": "rgba(22, 11, 17, 0.88)",
+        "--con5013-tab-hover-bg": "rgba(249, 115, 22, 0.18)",
+        "--con5013-tab-active-bg": "rgba(244, 63, 94, 0.2)",
+        "--con5013-tab-active-border": "rgba(250, 204, 21, 0.85)",
+        "--con5013-tab-active-color": "#fff7ed",
+        "--con5013-system-card-bg": "linear-gradient(160deg, rgba(124, 45, 18, 0.82), rgba(180, 83, 9, 0.85))",
+        "--con5013-system-card-border": "rgba(244, 114, 182, 0.4)",
+        "--con5013-system-card-radius": "30px",
+        "--con5013-system-card-shadow": "0 35px 80px -50px rgba(249, 115, 22, 0.75)",
+        "--con5013-api-stats-bg": "linear-gradient(135deg, rgba(244, 63, 94, 0.8), rgba(249, 115, 22, 0.6))",
+        "--con5013-api-stats-border": "rgba(251, 191, 36, 0.45)",
+        "--con5013-api-stats-radius": "26px",
+        "--con5013-api-stats-shadow": "0 26px 70px -48px rgba(251, 191, 36, 0.7)",
+        "--con5013-endpoints-bg": "rgba(88, 28, 14, 0.75)",
+        "--con5013-endpoints-border": "rgba(249, 115, 22, 0.4)",
+        "--con5013-endpoints-radius": "26px",
+        "--con5013-endpoints-shadow": "0 24px 60px -48px rgba(239, 68, 68, 0.65)",
+        "--con5013-endpoint-bg": "rgba(249, 115, 22, 0.18)",
+        "--con5013-endpoint-divider": "rgba(250, 204, 21, 0.35)",
+        "--con5013-terminal-bg": "rgba(60, 10, 20, 0.88)",
+        "--con5013-terminal-border": "rgba(249, 115, 22, 0.35)",
+        "--con5013-terminal-radius": "24px",
+        "--con5013-terminal-shadow": "0 20px 55px -35px rgba(244, 63, 94, 0.55)",
     },
     "Neon Matrix": {
         "--con5013-primary": "#22d3ee",
         "--con5013-secondary": "#14b8a6",
-        "--con5013-success": "#34d399",
-        "--con5013-warning": "#facc15",
+        "--con5013-success": "#4ade80",
+        "--con5013-warning": "#fde68a",
         "--con5013-error": "#f472b6",
         "--con5013-dark": "#031633",
         "--con5013-darker": "#010b1a",
+        "--con5013-border": "rgba(34, 211, 238, 0.38)",
+        "--con5013-light": "#ecfeff",
+        "--con5013-text": "#ccfbf1",
+        "--con5013-text-muted": "#22d3ee",
+        "--con5013-console-bg": "radial-gradient(circle at 10% 90%, rgba(20, 184, 166, 0.35), rgba(3, 22, 51, 0.94) 50%, rgba(1, 11, 26, 0.98))",
+        "--con5013-console-border": "rgba(34, 211, 238, 0.6)",
+        "--con5013-console-shadow": "0 50px 140px -50px rgba(45, 212, 191, 0.7)",
+        "--con5013-console-radius": "20px",
+        "--con5013-console-header-bg": "linear-gradient(135deg, rgba(34, 211, 238, 0.92), rgba(20, 184, 166, 0.92))",
+        "--con5013-console-tabs-bg": "rgba(1, 11, 26, 0.92)",
+        "--con5013-tab-hover-bg": "rgba(34, 211, 238, 0.16)",
+        "--con5013-tab-active-bg": "rgba(74, 222, 128, 0.16)",
+        "--con5013-tab-active-border": "rgba(74, 222, 128, 0.75)",
+        "--con5013-tab-active-color": "#ecfeff",
+        "--con5013-system-card-bg": "linear-gradient(150deg, rgba(13, 148, 136, 0.8), rgba(59, 130, 246, 0.6))",
+        "--con5013-system-card-border": "rgba(34, 211, 238, 0.45)",
+        "--con5013-system-card-radius": "18px",
+        "--con5013-system-card-shadow": "0 32px 70px -48px rgba(20, 184, 166, 0.7)",
+        "--con5013-api-stats-bg": "linear-gradient(135deg, rgba(15, 118, 110, 0.75), rgba(6, 182, 212, 0.6))",
+        "--con5013-api-stats-border": "rgba(34, 211, 238, 0.5)",
+        "--con5013-api-stats-radius": "20px",
+        "--con5013-api-stats-shadow": "0 28px 70px -52px rgba(34, 211, 238, 0.75)",
+        "--con5013-endpoints-bg": "rgba(2, 20, 46, 0.85)",
+        "--con5013-endpoints-border": "rgba(34, 211, 238, 0.4)",
+        "--con5013-endpoints-radius": "20px",
+        "--con5013-endpoints-shadow": "0 25px 65px -50px rgba(34, 197, 94, 0.6)",
+        "--con5013-endpoint-bg": "rgba(20, 184, 166, 0.14)",
+        "--con5013-endpoint-divider": "rgba(34, 211, 238, 0.3)",
+        "--con5013-terminal-bg": "rgba(3, 22, 51, 0.88)",
+        "--con5013-terminal-border": "rgba(34, 211, 238, 0.4)",
+        "--con5013-terminal-radius": "18px",
+        "--con5013-terminal-shadow": "0 22px 60px -40px rgba(20, 184, 166, 0.6)",
     },
     "Studio": {
         "--con5013-primary": "#a855f7",
         "--con5013-secondary": "#6366f1",
         "--con5013-success": "#10b981",
-        "--con5013-warning": "#f97316",
-        "--con5013-error": "#ef4444",
+        "--con5013-warning": "#fbbf24",
+        "--con5013-error": "#f87171",
         "--con5013-dark": "#111827",
         "--con5013-darker": "#0b1120",
+        "--con5013-border": "rgba(129, 140, 248, 0.38)",
+        "--con5013-light": "#f5f3ff",
+        "--con5013-text": "#ede9fe",
+        "--con5013-text-muted": "#c4b5fd",
+        "--con5013-console-bg": "radial-gradient(circle at 20% 20%, rgba(99, 102, 241, 0.4), rgba(15, 23, 42, 0.95) 60%, rgba(11, 17, 32, 0.98))",
+        "--con5013-console-border": "rgba(129, 140, 248, 0.55)",
+        "--con5013-console-shadow": "0 48px 120px -48px rgba(129, 140, 248, 0.65)",
+        "--con5013-console-radius": "32px",
+        "--con5013-console-header-bg": "linear-gradient(135deg, rgba(168, 85, 247, 0.95), rgba(99, 102, 241, 0.95))",
+        "--con5013-console-tabs-bg": "rgba(11, 17, 32, 0.9)",
+        "--con5013-tab-hover-bg": "rgba(168, 85, 247, 0.16)",
+        "--con5013-tab-active-bg": "rgba(99, 102, 241, 0.2)",
+        "--con5013-tab-active-border": "rgba(129, 140, 248, 0.85)",
+        "--con5013-tab-active-color": "#ede9fe",
+        "--con5013-system-card-bg": "linear-gradient(150deg, rgba(76, 29, 149, 0.85), rgba(129, 140, 248, 0.65))",
+        "--con5013-system-card-border": "rgba(196, 181, 253, 0.45)",
+        "--con5013-system-card-radius": "28px",
+        "--con5013-system-card-shadow": "0 34px 80px -52px rgba(129, 140, 248, 0.7)",
+        "--con5013-api-stats-bg": "linear-gradient(140deg, rgba(79, 70, 229, 0.75), rgba(167, 139, 250, 0.6))",
+        "--con5013-api-stats-border": "rgba(168, 85, 247, 0.45)",
+        "--con5013-api-stats-radius": "28px",
+        "--con5013-api-stats-shadow": "0 30px 80px -52px rgba(139, 92, 246, 0.7)",
+        "--con5013-endpoints-bg": "rgba(30, 27, 75, 0.8)",
+        "--con5013-endpoints-border": "rgba(129, 140, 248, 0.4)",
+        "--con5013-endpoints-radius": "28px",
+        "--con5013-endpoints-shadow": "0 26px 70px -50px rgba(168, 85, 247, 0.65)",
+        "--con5013-endpoint-bg": "rgba(129, 140, 248, 0.18)",
+        "--con5013-endpoint-divider": "rgba(196, 181, 253, 0.35)",
+        "--con5013-terminal-bg": "rgba(30, 27, 75, 0.9)",
+        "--con5013-terminal-border": "rgba(139, 92, 246, 0.4)",
+        "--con5013-terminal-radius": "26px",
+        "--con5013-terminal-shadow": "0 24px 70px -45px rgba(129, 140, 248, 0.6)",
     },
 }
 
@@ -254,6 +382,34 @@ LANDING_TEMPLATE = """
     <style>
         :root {
             color-scheme: dark;
+            --con5013-console-bg: linear-gradient(135deg, rgba(17, 24, 39, 0.96), rgba(15, 23, 42, 0.96));
+            --con5013-console-border: rgba(99, 102, 241, 0.35);
+            --con5013-console-shadow: 0 30px 90px -45px rgba(15, 23, 42, 0.8);
+            --con5013-console-radius: 18px;
+            --con5013-console-header-bg: linear-gradient(135deg, rgba(99, 102, 241, 0.95), rgba(139, 92, 246, 0.95));
+            --con5013-console-tabs-bg: rgba(17, 24, 39, 0.9);
+            --con5013-tab-hover-bg: rgba(148, 163, 184, 0.08);
+            --con5013-tab-active-bg: rgba(99, 102, 241, 0.16);
+            --con5013-tab-active-border: var(--con5013-primary);
+            --con5013-tab-active-color: var(--con5013-primary);
+            --con5013-system-card-bg: rgba(17, 24, 39, 0.92);
+            --con5013-system-card-border: rgba(148, 163, 184, 0.35);
+            --con5013-system-card-radius: 16px;
+            --con5013-system-card-shadow: none;
+            --con5013-api-stats-bg: rgba(17, 24, 39, 0.9);
+            --con5013-api-stats-border: rgba(148, 163, 184, 0.35);
+            --con5013-api-stats-radius: 16px;
+            --con5013-api-stats-shadow: none;
+            --con5013-endpoints-bg: rgba(15, 23, 42, 0.85);
+            --con5013-endpoints-border: rgba(148, 163, 184, 0.35);
+            --con5013-endpoints-radius: 16px;
+            --con5013-endpoints-shadow: none;
+            --con5013-endpoint-bg: transparent;
+            --con5013-endpoint-divider: rgba(148, 163, 184, 0.25);
+            --con5013-terminal-bg: rgba(15, 23, 42, 0.9);
+            --con5013-terminal-border: rgba(148, 163, 184, 0.35);
+            --con5013-terminal-radius: 16px;
+            --con5013-terminal-shadow: none;
         }
         * { box-sizing: border-box; }
         body {
@@ -405,6 +561,61 @@ LANDING_TEMPLATE = """
             font-family: 'Courier New', monospace;
             color: #bae6fd;
             font-size: 0.9rem;
+        }
+        /* Con5013 console theming playground */
+        body .con5013-console {
+            background: var(--con5013-console-bg);
+            border: 1px solid var(--con5013-console-border);
+            border-radius: var(--con5013-console-radius);
+            box-shadow: var(--con5013-console-shadow);
+            backdrop-filter: blur(18px);
+        }
+        body .con5013-header {
+            background: var(--con5013-console-header-bg);
+        }
+        body .con5013-tabs {
+            background: var(--con5013-console-tabs-bg);
+        }
+        body .con5013-tab:hover {
+            background: var(--con5013-tab-hover-bg);
+        }
+        body .con5013-tab.active {
+            background: var(--con5013-tab-active-bg);
+            border-bottom-color: var(--con5013-tab-active-border);
+            color: var(--con5013-tab-active-color);
+        }
+        body .con5013-terminal {
+            background: var(--con5013-terminal-bg);
+            border: 1px solid var(--con5013-terminal-border);
+            border-radius: var(--con5013-terminal-radius);
+            box-shadow: var(--con5013-terminal-shadow);
+            backdrop-filter: blur(14px);
+        }
+        body .con5013-system-card {
+            background: var(--con5013-system-card-bg);
+            border: 1px solid var(--con5013-system-card-border);
+            border-radius: var(--con5013-system-card-radius);
+            box-shadow: var(--con5013-system-card-shadow);
+        }
+        body .con5013-api-stats {
+            background: var(--con5013-api-stats-bg);
+            border: 1px solid var(--con5013-api-stats-border);
+            border-radius: var(--con5013-api-stats-radius);
+            box-shadow: var(--con5013-api-stats-shadow);
+        }
+        body .con5013-endpoints {
+            background: var(--con5013-endpoints-bg);
+            border: 1px solid var(--con5013-endpoints-border);
+            border-radius: var(--con5013-endpoints-radius);
+            box-shadow: var(--con5013-endpoints-shadow);
+            overflow: hidden;
+        }
+        body .con5013-endpoint {
+            background: var(--con5013-endpoint-bg);
+            border-bottom: 1px solid var(--con5013-endpoint-divider);
+        }
+        body .con5013-endpoint:last-child {
+            border-bottom: none;
         }
         .footer {
             text-align: center;
