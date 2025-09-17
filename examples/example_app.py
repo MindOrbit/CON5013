@@ -591,7 +591,8 @@ LANDING_TEMPLATE = """
             if (!preview) return;
             const preset = themePresets[presetName] || {};
             const lines = Object.entries(preset).map(([key, value]) => `${key}: ${value};`);
-            preview.textContent = `:root\n${lines.map(line => `  ${line}`).join('\n')}`;
+            const formatted = [':root', ...lines.map((line) => '  ' + line)].join('\n');
+            preview.textContent = formatted;
         }
 
         function applyTheme(presetName) {
