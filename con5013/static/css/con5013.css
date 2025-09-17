@@ -14,6 +14,10 @@
     --con5013-text-muted: #9ca3af;
 }
 
+.con5013-hidden {
+    display: none !important;
+}
+
 /* Console Overlay */
 .con5013-overlay {
     position: fixed;

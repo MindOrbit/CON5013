@@ -508,6 +508,7 @@ LANDING_TEMPLATE = """
                     <h3>System metrics focus</h3>
                     <p>Toggle individual cards to curate your operational dashboard.</p>
                     <label class="toggle"><span>System info</span><input type="checkbox" data-metric-toggle="system_info" checked></label>
+                    <label class="toggle"><span>Application</span><input type="checkbox" data-metric-toggle="application" checked></label>
                     <label class="toggle"><span>CPU</span><input type="checkbox" data-metric-toggle="cpu" checked></label>
                     <label class="toggle"><span>Memory</span><input type="checkbox" data-metric-toggle="memory" checked></label>
                     <label class="toggle"><span>Disk</span><input type="checkbox" data-metric-toggle="disk" checked></label>

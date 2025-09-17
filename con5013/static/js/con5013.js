@@ -732,34 +732,51 @@ class Con5013Console {
     }
 
     applyFeatureToggles() {
-        // Hide tabs and panels based on feature flags
+        const tabAvailability = {
+            logs: () => !!this.features.logs,
+            terminal: () => !!this.features.terminal,
+            api: () => !!this.features.api_scanner,
+            system: () => !!this.features.system_monitor,
+        };
+
         const hideTab = (name, enabled) => {
             const tabBtn = document.querySelector(`.con5013-tab[data-tab="${name}"]`);
             const panel = document.getElementById(`con5013-${name}-tab`);
-            if (!enabled) {
-                tabBtn?.parentElement?.removeChild(tabBtn);
-                panel?.parentElement?.removeChild(panel);
+            if (!tabBtn || !panel) return;
+
+            const shouldHide = !enabled;
+            tabBtn.classList.toggle('con5013-hidden', shouldHide);
+            panel.classList.toggle('con5013-hidden', shouldHide);
+            if (shouldHide) {
+                tabBtn.classList.remove('active');
+                panel.classList.remove('active');
+                tabBtn.setAttribute('aria-hidden', 'true');
+                panel.setAttribute('aria-hidden', 'true');
+                panel.setAttribute('hidden', '');
                 if (this.currentTab === name) {
-                    // Switch to a next available tab
-                    const order = ['logs','terminal','api','system'];
-                    for (const t of order) {
-                        if (t !== name) {
-                            if ((t === 'logs' && this.features.logs) ||
-                                (t === 'terminal' && this.features.terminal) ||
-                                (t === 'api' && this.features.api_scanner) ||
-                                (t === 'system' && this.features.system_monitor)) {
-                                this.switchTab(t);
-                                break;
-                            }
-                        }
+                    const order = ['logs', 'terminal', 'api', 'system'];
+                    const nextTab = order.find((tab) => tab !== name && tabAvailability[tab]?.());
+                    if (nextTab) {
+                        this.switchTab(nextTab);
+                    } else {
+                        this.currentTab = null;
                     }
+                }
+            } else {
+                tabBtn.removeAttribute('aria-hidden');
+                panel.removeAttribute('aria-hidden');
+                panel.removeAttribute('hidden');
+                if (!this.currentTab || !tabAvailability[this.currentTab]?.()) {
+                    this.switchTab(name);
                 }
             }
         };
+
         hideTab('logs', !!this.features.logs);
         hideTab('terminal', !!this.features.terminal);
         hideTab('api', !!this.features.api_scanner);
         hideTab('system', !!this.features.system_monitor);
+
         this.applySystemMetricToggles();
     }
 
@@ -789,9 +806,9 @@ class Con5013Console {
         Object.entries(selectors).forEach(([metric, selector]) => {
             const card = document.querySelector(selector);
             if (!card) return;
-            if (!this.isMetricEnabled(metric)) {
-                card.remove();
-            }
+            const shouldHide = !this.isMetricEnabled(metric);
+            card.classList.toggle('con5013-hidden', shouldHide);
+            card.setAttribute('aria-hidden', shouldHide ? 'true' : 'false');
         });
     }
     
@@ -922,25 +939,41 @@ class Con5013Console {
 
     switchTab(tabName) {
         // Update tab buttons
+        const isTabAvailable = (name) => {
+            const btn = document.querySelector(`.con5013-tab[data-tab="${name}"]`);
+            const panel = document.getElementById(`con5013-${name}-tab`);
+            if (!btn || !panel) return false;
+            return !btn.classList.contains('con5013-hidden') && !panel.classList.contains('con5013-hidden');
+        };
+
+        let targetTab = tabName;
+        if (!isTabAvailable(targetTab)) {
+            const order = ['logs', 'terminal', 'api', 'system'];
+            targetTab = order.find((tab) => isTabAvailable(tab)) || null;
+            if (!targetTab) {
+                this.currentTab = null;
+                return;
+            }
+        }
+
         document.querySelectorAll('.con5013-tab').forEach(tab => {
             tab.classList.remove('active');
         });
-        document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
-        
-        // Update tab content
+        document.querySelector(`[data-tab="${targetTab}"]`)?.classList.add('active');
+
         document.querySelectorAll('.con5013-tab-content').forEach(content => {
             content.classList.remove('active');
         });
-        document.getElementById(`con5013-${tabName}-tab`).classList.add('active');
-        
-        this.currentTab = tabName;
-        
+        document.getElementById(`con5013-${targetTab}-tab`)?.classList.add('active');
+
+        this.currentTab = targetTab;
+
         // Load tab-specific data
-        if (tabName === 'terminal') {
+        if (targetTab === 'terminal') {
             setTimeout(() => {
                 document.getElementById('con5013-terminal-command')?.focus();
             }, 100);
-        } else if (tabName === 'system') {
+        } else if (targetTab === 'system') {
             this.refreshSystemStats();
         }
     }
