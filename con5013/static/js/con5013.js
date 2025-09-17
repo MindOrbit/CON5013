@@ -4,6 +4,61 @@
  */
 
 const CON5013_SCRIPT_ELEMENT = typeof document !== 'undefined' ? document.currentScript : null;
+const CON5013_VALID_TABS = ['logs', 'terminal', 'api', 'system'];
+
+function ensureCon5013ReadyPromise() {
+    if (typeof window === 'undefined') {
+        return null;
+    }
+
+    if (window.CON5013_READY && window.CON5013_READY_DETAIL) {
+        return Promise.resolve(window.CON5013_READY_DETAIL);
+    }
+
+    if (window.CON5013_READY_PROMISE && typeof window.CON5013_READY_PROMISE.then === 'function') {
+        return window.CON5013_READY_PROMISE;
+    }
+
+    window.CON5013_READY_PROMISE = new Promise(resolve => {
+        const handler = event => {
+            window.removeEventListener('con5013:ready', handler);
+            resolve(event?.detail ?? { instance: window.con5013, kind: 'modern', api: window.con5013 });
+        };
+        try {
+            window.addEventListener('con5013:ready', handler, { once: true });
+        } catch (_) {
+            window.addEventListener('con5013:ready', handler);
+        }
+    });
+
+    return window.CON5013_READY_PROMISE;
+}
+
+async function openCon5013Console(options = {}) {
+    if (typeof window === 'undefined') {
+        throw new Error('Con5013 console is not available in this environment');
+    }
+
+    const readyPromise = ensureCon5013ReadyPromise();
+    if (!readyPromise) {
+        throw new Error('Con5013 readiness promise could not be created');
+    }
+
+    const detail = await readyPromise;
+    const instance = detail?.instance || window.con5013;
+
+    if (!instance || typeof instance.openConsole !== 'function') {
+        throw new Error('Con5013 console instance is not ready');
+    }
+
+    return instance.openConsole(options);
+}
+
+if (typeof window !== 'undefined') {
+    window.openCon5013Console = openCon5013Console;
+    window.launchCon5013Console = openCon5013Console;
+    ensureCon5013ReadyPromise();
+}
 
 class Con5013Console {
     constructor(options = {}) {
@@ -751,7 +806,17 @@ class Con5013Console {
             }
         }, this.options.updateInterval);
     }
-    
+
+    async waitForElement(selector, timeout = 2000, interval = 50) {
+        const deadline = Date.now() + Math.max(0, timeout);
+        let element = document.querySelector(selector);
+        while (!element && Date.now() < deadline) {
+            await new Promise(resolve => setTimeout(resolve, interval));
+            element = document.querySelector(selector);
+        }
+        return element || null;
+    }
+
     // Public API
     open() {
         this.isOpen = true;
@@ -781,7 +846,80 @@ class Con5013Console {
             this.open();
         }
     }
-    
+
+    async openConsole(options = {}) {
+        const opts = typeof options === 'string' ? { tab: options } : { ...options };
+        const tabCandidate = typeof opts.tab === 'string' ? opts.tab.trim().toLowerCase() : '';
+        const shouldRunCommand = typeof opts.command === 'string' && opts.command.trim() !== '';
+
+        this.open();
+
+        let targetTab = CON5013_VALID_TABS.includes(tabCandidate) ? tabCandidate : this.currentTab || 'logs';
+        if (shouldRunCommand && this.features.terminal) {
+            targetTab = 'terminal';
+        }
+
+        if (!this.features.terminal && targetTab === 'terminal') {
+            console.warn('Con5013: terminal tab unavailable; staying on current tab');
+            targetTab = this.currentTab || 'logs';
+        }
+
+        if (targetTab && targetTab !== this.currentTab) {
+            const tabButton = document.querySelector(`[data-tab="${targetTab}"]`);
+            const tabPanel = document.getElementById(`con5013-${targetTab}-tab`);
+            if (tabButton && tabPanel) {
+                this.switchTab(targetTab);
+            } else {
+                console.warn(`Con5013: requested tab "${targetTab}" is not available`);
+                targetTab = this.currentTab || 'logs';
+            }
+        }
+
+        if (targetTab === 'terminal' && !shouldRunCommand && opts.focusCommandInput !== false) {
+            setTimeout(() => {
+                document.getElementById('con5013-terminal-command')?.focus();
+            }, 100);
+        }
+
+        if (!shouldRunCommand) {
+            return this;
+        }
+
+        if (!this.features.terminal) {
+            console.warn('Con5013: terminal feature disabled; cannot run command');
+            return this;
+        }
+
+        const previewDelay = Number.isFinite(opts.previewDelay) ? Number(opts.previewDelay) : 0;
+        const clearDelay = Number.isFinite(opts.clearDelay) ? Number(opts.clearDelay) : 200;
+        const inputTimeout = Number.isFinite(opts.inputTimeout) ? Number(opts.inputTimeout) : 4000;
+
+        const input = await this.waitForElement('#con5013-terminal-command', inputTimeout);
+        if (!input) {
+            console.warn('Con5013: terminal input unavailable; command skipped');
+            return this;
+        }
+
+        const command = opts.command.trim();
+        input.value = command;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+
+        if (previewDelay > 0) {
+            await new Promise(resolve => setTimeout(resolve, previewDelay));
+        }
+
+        await this.executeTerminalCommand(command);
+
+        if (clearDelay > 0) {
+            await new Promise(resolve => setTimeout(resolve, clearDelay));
+        }
+
+        input.value = '';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+
+        return this;
+    }
+
     switchTab(tabName) {
         // Update tab buttons
         document.querySelectorAll('.con5013-tab').forEach(tab => {
@@ -1324,19 +1462,8 @@ class Con5013Console {
     }
 
     async runEndpointInTerminal(pathOrUrl, method) {
-        // Build http command for the terminal engine
         const cmd = `http ${method} ${pathOrUrl}`;
-        // Switch to terminal tab
-        this.switchTab('terminal');
-        // Prefill input for user visibility
-        const input = document.getElementById('con5013-terminal-command');
-        if (input) input.value = cmd;
-        // Let user see the typed command for ~0.2s
-        await new Promise(res => setTimeout(res, 200));
-        // Execute and then clear the input so it won't run twice accidentally
-        await this.executeTerminalCommand(cmd);
-        const inputAfter = document.getElementById('con5013-terminal-command');
-        if (inputAfter) inputAfter.value = '';
+        await this.openConsole({ tab: 'terminal', command: cmd, previewDelay: 200 });
     }
     
     updateApiStats(results = null) {
@@ -1962,6 +2089,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 window.con5013Overlay = con5013;
             }
             window.Con5013Console = Con5013Console;
+
+            const readyDetail = { instance: con5013, kind: 'modern', api: con5013 };
+            try {
+                window.dispatchEvent(new CustomEvent('con5013:ready', { detail: readyDetail }));
+            } catch (dispatchError) {
+                try {
+                    const legacyEvent = document.createEvent('CustomEvent');
+                    legacyEvent.initCustomEvent('con5013:ready', false, false, readyDetail);
+                    window.dispatchEvent(legacyEvent);
+                } catch (_) {
+                    // Ignore environments without CustomEvent support
+                }
+            }
+
+            if (!window.CON5013_READY_PROMISE || typeof window.CON5013_READY_PROMISE.then !== 'function') {
+                window.CON5013_READY_PROMISE = Promise.resolve(readyDetail);
+            } else {
+                window.CON5013_READY_PROMISE = window.CON5013_READY_PROMISE.then(() => readyDetail);
+            }
+
+            window.CON5013_READY = true;
+            window.CON5013_READY_DETAIL = readyDetail;
         }
     } catch (err) {
         console.warn('Con5013: unable to expose console globally', err);
@@ -1971,6 +2120,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // Export for module systems
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = Con5013Console;
+    module.exports.openCon5013Console = openCon5013Console;
 }
 
 

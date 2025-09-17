@@ -1238,6 +1238,42 @@ def home():
                     feedbackEl.className = `crawl-demo-feedback ${status} ${message ? 'active' : ''}`.trim();
                 };
 
+                const coerceDetailToContext = (detail) => {
+                    if (!detail || typeof detail !== 'object') {
+                        return null;
+                    }
+                    if (detail.kind && detail.api) {
+                        return detail;
+                    }
+                    if (detail.instance) {
+                        return { kind: 'modern', api: detail.instance };
+                    }
+                    if (detail.api) {
+                        return { kind: 'modern', api: detail.api };
+                    }
+                    if (detail.open && typeof detail.open === 'function') {
+                        return { kind: 'modern', api: detail };
+                    }
+                    return null;
+                };
+
+                const normalizeConsoleContext = (value) => {
+                    if (!value) {
+                        return null;
+                    }
+                    if (value.kind && value.api) {
+                        return value;
+                    }
+                    const coerced = coerceDetailToContext(value);
+                    if (coerced) {
+                        return coerced;
+                    }
+                    if (value === window.con5013 && value && typeof value.open === 'function') {
+                        return { kind: 'modern', api: value };
+                    }
+                    return null;
+                };
+
                 const resolveConsole = () => {
                     if (window.con5013 && typeof window.con5013.open === 'function') {
                         return { kind: 'modern', api: window.con5013 };
@@ -1277,7 +1313,71 @@ def home():
                         attempt();
                     });
 
-                const waitForConsole = (timeout = 6000) => waitFor(resolveConsole, { timeout, interval: 150 });
+                const waitForConsole = (timeout = 10000) => {
+                    const immediate = resolveConsole();
+                    if (immediate) {
+                        return Promise.resolve(immediate);
+                    }
+
+                    return new Promise((resolve, reject) => {
+                        let settled = false;
+                        let timerId = null;
+
+                        const finish = (value, isError = false) => {
+                            if (settled) {
+                                return;
+                            }
+                            settled = true;
+                            if (timerId !== null) {
+                                clearTimeout(timerId);
+                            }
+                            window.removeEventListener('con5013:ready', handleReady);
+                            if (isError) {
+                                reject(value);
+                            } else {
+                                resolve(value);
+                            }
+                        };
+
+                        const handleReady = (event) => {
+                            const detail = (event && event.detail) || window.CON5013_READY_DETAIL;
+                            const ctx = resolveConsole() || coerceDetailToContext(detail);
+                            if (ctx) {
+                                finish(ctx);
+                            }
+                        };
+
+                        window.addEventListener('con5013:ready', handleReady);
+
+                        const readyPromise = window.CON5013_READY_PROMISE;
+                        if (readyPromise && typeof readyPromise.then === 'function') {
+                            readyPromise
+                                .then((detail) => {
+                                    const ctx = resolveConsole() || coerceDetailToContext(detail);
+                                    if (ctx) {
+                                        finish(ctx);
+                                    }
+                                })
+                                .catch(() => {
+                                    // Ignore promise rejections here; manual timeout handles failures.
+                                });
+                        }
+
+                        waitFor(resolveConsole, { timeout, interval: 150 })
+                            .then((ctx) => {
+                                if (ctx) {
+                                    finish(ctx);
+                                }
+                            })
+                            .catch(() => {
+                                // Let the manual timeout govern failure conditions.
+                            });
+
+                        timerId = setTimeout(() => {
+                            finish(new Error('timeout'), true);
+                        }, timeout);
+                    });
+                };
                 const waitForTerminalInput = (kind, timeout = 5000) =>
                     waitFor(() => findTerminalInput(kind), { timeout, interval: 150 });
 
@@ -1294,7 +1394,9 @@ def home():
                     }
 
                     hookInFlight = (async () => {
-                        const consoleCtx = providedCtx || (await waitForConsole(7000).catch(() => null));
+                        const normalizedProvided = normalizeConsoleContext(providedCtx);
+                        const fallbackCtx = normalizedProvided || (await waitForConsole(10000).catch(() => null));
+                        const consoleCtx = normalizeConsoleContext(fallbackCtx);
                         if (!consoleCtx) {
                             return false;
                         }
@@ -1424,15 +1526,35 @@ def home():
                     return hookInFlight;
                 };
 
-                const runCrawlFromForm = async (normalizedUrl, modeValue) => {
-                    const consoleCtx = await waitForConsole(7000).catch(() => null);
-                    if (!consoleCtx) {
+                const launchViaHelper = async (command) => {
+                    const helper = typeof openCon5013Console === 'function'
+                        ? openCon5013Console
+                        : (typeof window.launchCon5013Console === 'function' ? window.launchCon5013Console : null);
+                    if (!helper) {
+                        return { success: false, reason: 'helper-missing' };
+                    }
+
+                    try {
+                        const instance = await helper({
+                            tab: 'terminal',
+                            command,
+                            clearDelay: 200,
+                        });
+                        await ensureConsoleHooks({ kind: 'modern', api: instance });
+                        return { success: true };
+                    } catch (error) {
+                        console.warn('Con5013 helper execution failed', error);
+                        return { success: false, reason: 'helper-error', error };
+                    }
+                };
+
+                const legacyLaunchCrawl = async (consoleCtx, command) => {
+                    const context = normalizeConsoleContext(consoleCtx);
+                    if (!context) {
                         return { success: false, reason: 'console-timeout' };
                     }
 
-                    await ensureConsoleHooks(consoleCtx);
-
-                    const { kind, api } = consoleCtx;
+                    const { kind, api } = context;
 
                     if (typeof api.open === 'function') {
                         api.open();
@@ -1455,7 +1577,6 @@ def home():
                         return { success: false, reason: 'terminal-missing' };
                     }
 
-                    const command = `crawl4ai-run ${JSON.stringify(normalizedUrl)} --mode ${modeValue || 'markdown'}`;
                     terminalInput.value = command;
                     terminalInput.dispatchEvent(new Event('input', { bubbles: true }));
 
@@ -1487,6 +1608,24 @@ def home():
 
                     terminalInput.focus();
                     return { success: true };
+                };
+
+                const runCrawlFromForm = async (normalizedUrl, modeValue) => {
+                    const command = `crawl4ai-run ${JSON.stringify(normalizedUrl)} --mode ${modeValue || 'markdown'}`;
+
+                    const helperResult = await launchViaHelper(command);
+                    if (helperResult.success) {
+                        return helperResult;
+                    }
+
+                    const consoleCtx = await waitForConsole(7000).catch(() => null);
+                    if (!consoleCtx) {
+                        return { success: false, reason: 'console-timeout' };
+                    }
+
+                    await ensureConsoleHooks(consoleCtx);
+
+                    return legacyLaunchCrawl(consoleCtx, command);
                 };
 
                 if (form) {
