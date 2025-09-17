@@ -1127,7 +1127,7 @@ def home():
                         <button type="button" onclick="openCon5013Console({tab: 'system'});" class="btn" data-con5013-button id="custom-con5013-button">
                             Open Con5013 Function
                         </button>
-                        <button type="button" onclick="openCon5013Console({tab: 'terminal', command: "python 1+2"});" class="btn" data-con5013-button id="custom-con5013-button">
+                        <button type="button" onclick="openCon5013Console({tab: 'terminal', command: 'py 1+2'});" class="btn" data-con5013-button id="custom-con5013-button">
                             Open Con5013 Execution
                         </button>
                         <p class="crawl-demo-hint">
