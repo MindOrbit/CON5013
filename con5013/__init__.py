@@ -128,6 +128,10 @@ class Con5013:
             'CON5013_CRAWL4AI_INTEGRATION': False,
             'CON5013_WEBSOCKET_SUPPORT': False,
             'CON5013_AUTHENTICATION': False,
+            'CON5013_AUTH_USER': None,
+            'CON5013_AUTH_PASSWORD': None,
+            'CON5013_AUTH_TOKEN': None,
+            'CON5013_AUTH_CALLBACK': None,
             
             # API scanner safety
             'CON5013_API_PROTECTED_ENDPOINTS': [
