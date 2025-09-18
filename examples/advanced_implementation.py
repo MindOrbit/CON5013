@@ -91,7 +91,10 @@ CON5013_CONFIG: Dict[str, Any] = {
     "CON5013_HOTKEY": "Alt+C",
     "CON5013_CRAWL4AI_INTEGRATION": False,
     "CON5013_WEBSOCKET_SUPPORT": False,
-    "CON5013_AUTHENTICATION": False,
+    # Lock down the console with HTTP Basic auth; swap to 'token' or a callback as needed.
+    "CON5013_AUTHENTICATION": "basic",
+    "CON5013_AUTH_USER": "operations",
+    "CON5013_AUTH_PASSWORD": "console-access",
 }
 
 

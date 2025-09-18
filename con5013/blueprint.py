@@ -6,6 +6,8 @@ Provides all the web routes and API endpoints for the Con5013 console.
 import json
 import time
 from flask import Blueprint, render_template, jsonify, request, current_app, abort
+
+from .core.security import enforce_con5013_security
 from .core.utils import get_con5013_instance
 
 # Create the blueprint
@@ -16,6 +18,14 @@ con5013_blueprint = Blueprint(
     static_folder='static',
     static_url_path='/static'
 )
+
+
+@con5013_blueprint.before_request
+def _enforce_security():
+    """Gate all Con5013 routes according to the configured auth policy."""
+    response = enforce_con5013_security()
+    if response is not None:
+        return response
 
 @con5013_blueprint.route('/')
 def console_home():

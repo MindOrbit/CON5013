@@ -350,6 +350,29 @@ Con5013(app, config={
 })
 ```
 
+### Authentication Options
+
+Protect the console and API routes by enabling built-in authentication modes. All checks are executed before every Con5013 request, returning JSON for API failures and a themed HTML error page for UI requests.
+
+```python
+Con5013(app, config={
+    'CON5013_AUTHENTICATION': 'basic',          # 'none' (default), 'basic', 'token', callable
+    'CON5013_AUTH_USER': 'operator',            # Required for basic auth
+    'CON5013_AUTH_PASSWORD': 's3cret',          # Required for basic auth
+    'CON5013_AUTH_TOKEN': 'super-secret',       # Required for token auth
+    'CON5013_AUTH_CALLBACK': verify_console_access,  # Optional fallback when using callables
+})
+```
+
+Supported modes:
+
+- **`False` / `'none'`** – default behaviour, all requests are allowed.
+- **`'basic'`** – HTTP Basic authentication using `CON5013_AUTH_USER` and `CON5013_AUTH_PASSWORD`.
+- **`'token'`** – expects `Authorization: Bearer <token>` (or `Token`/`X-Auth-Token`) matching `CON5013_AUTH_TOKEN`.
+- **Callable** – supply a callable for `CON5013_AUTHENTICATION` or set `CON5013_AUTH_CALLBACK`; it receives the Flask `request` and should return truthy/`None` to allow access. You can hook into Flask-Login, session checks, or any custom logic.
+
+If an authentication mode is enabled but its required configuration is missing, Con5013 returns an informative 500 response so misconfigurations are surfaced early.
+
 ### Log Sources
 
 Configure multiple log sources:
