@@ -6,7 +6,10 @@ Basic tests for Con5013 Flask extension.
 import unittest
 import tempfile
 import os
+from unittest.mock import Mock, patch
+
 from flask import Flask
+
 from con5013 import Con5013
 
 class TestCon5013(unittest.TestCase):
@@ -52,6 +55,7 @@ class TestCon5013(unittest.TestCase):
         self.assertEqual(console.config['CON5013_SECURITY_PROFILE'], 'secured')
         self.assertFalse(console.config['CON5013_ENABLE_TERMINAL'])
         self.assertFalse(console.config['CON5013_ENABLE_API_SCANNER'])
+        self.assertFalse(console.config['CON5013_API_ALLOW_EXTERNAL'])
         self.assertFalse(console.config['CON5013_ALLOW_LOG_CLEAR'])
         self.assertFalse(console.config['CON5013_AUTO_INJECT'])
         self.assertFalse(console.config['CON5013_OVERLAY_MODE'])
@@ -100,7 +104,7 @@ class TestCon5013(unittest.TestCase):
     def test_api_endpoints(self):
         """Test that API endpoints are accessible."""
         console = Con5013(self.app)
-        
+
         with self.app.test_client() as client:
             # Test logs API
             response = client.get('/con5013/api/logs')
@@ -112,7 +116,25 @@ class TestCon5013(unittest.TestCase):
 
             health_response = client.get('/con5013/api/system/health')
             self.assertIn(health_response.status_code, [200, 500])
-            
+
+    def test_api_info_reports_scanner_policy(self):
+        """The info endpoint should disclose the active scanner policy."""
+        self.app.config['CON5013_API_ALLOW_EXTERNAL'] = False
+        self.app.config['CON5013_API_EXTERNAL_ALLOWLIST'] = ['https://allowed.example.com/api']
+        console = Con5013(self.app)
+
+        with self.app.test_client() as client:
+            response = client.get('/con5013/api/info')
+            self.assertEqual(response.status_code, 200)
+            payload = response.get_json() or {}
+            info = payload.get('info') or {}
+            policy = info.get('scanner_policy') or {}
+
+            self.assertEqual(policy.get('allow_external'), False)
+            self.assertEqual(policy.get('mode'), 'disabled')
+            # Even when disabled, the declared allowlist should be preserved
+            self.assertIn('https://allowed.example.com/api', policy.get('external_allowlist', []))
+
     def test_custom_url_prefix(self):
         """Test custom URL prefix configuration."""
         config = {'CON5013_URL_PREFIX': '/admin/console'}
@@ -198,6 +220,53 @@ class TestCon5013Components(unittest.TestCase):
         """Test APIScanner component."""
         console = Con5013(self.app, config={'CON5013_ENABLE_API_SCANNER': True})
         self.assertIsNotNone(console.api_scanner)
+
+    def test_api_scanner_blocks_external_when_disabled(self):
+        """External probing should be rejected when the policy disables it."""
+        self.app.config['CON5013_API_ALLOW_EXTERNAL'] = False
+        console = Con5013(self.app)
+
+        scanner = console.api_scanner
+        with patch('con5013.core.api_scanner.requests.request') as mock_request:
+            result = scanner.test_endpoint('https://example.com/resource')
+
+        self.assertEqual(result.get('status'), 'blocked')
+        self.assertIn('CON5013_API_ALLOW_EXTERNAL', result.get('error', ''))
+        mock_request.assert_not_called()
+
+    def test_api_scanner_enforces_allowlist(self):
+        """Only allowlisted domains should be reachable when a list is provided."""
+        self.app.config['CON5013_API_EXTERNAL_ALLOWLIST'] = ['https://allowed.example.com/api']
+        console = Con5013(self.app)
+
+        scanner = console.api_scanner
+        with patch('con5013.core.api_scanner.requests.request') as mock_request:
+            result = scanner.test_endpoint('https://other.example.com/api')
+
+        self.assertEqual(result.get('status'), 'blocked')
+        self.assertIn('CON5013_API_EXTERNAL_ALLOWLIST', result.get('error', ''))
+        mock_request.assert_not_called()
+
+    def test_api_scanner_allows_allowlisted_domain(self):
+        """Allowlisted domains should be passed through to the requests layer."""
+        self.app.config['CON5013_API_EXTERNAL_ALLOWLIST'] = ['https://allowed.example.com/api']
+        console = Con5013(self.app)
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {'Content-Type': 'application/json'}
+        mock_response.content = b'{"ok": true}'
+        mock_response.text = '{"ok": true}'
+        mock_response.json.return_value = {'ok': True}
+
+        scanner = console.api_scanner
+        with patch('con5013.core.api_scanner.requests.request', return_value=mock_response) as mock_request:
+            result = scanner.test_endpoint('https://allowed.example.com/api/status')
+
+        mock_request.assert_called_once()
+        self.assertEqual(result.get('status'), 'success')
+        self.assertEqual(result.get('status_code'), 200)
+        self.assertEqual(result.get('json_response'), {'ok': True})
         
     def test_system_monitor_initialization(self):
         """Test SystemMonitor component."""

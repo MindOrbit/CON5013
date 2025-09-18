@@ -7,6 +7,7 @@ import json
 import time
 from flask import Blueprint, render_template, jsonify, request, current_app, abort
 
+from .core.api_scanner import APIScanner
 from .core.security import enforce_con5013_security
 from .core.utils import get_con5013_instance
 
@@ -462,6 +463,7 @@ def api_info():
         },
         'crawl4ai_integration': con5013.config['CON5013_CRAWL4AI_INTEGRATION'],
         'security_profile': con5013.config.get('CON5013_SECURITY_PROFILE', 'open'),
+        'scanner_policy': APIScanner.describe_policy_from_config(con5013.config),
         'endpoints': {
             'console': con5013.config['CON5013_URL_PREFIX'] + '/',
             'overlay': con5013.config['CON5013_URL_PREFIX'] + '/overlay',
