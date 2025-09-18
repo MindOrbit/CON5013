@@ -62,6 +62,7 @@ class Con5013:
         'secured': {
             'CON5013_ENABLE_TERMINAL': False,
             'CON5013_ENABLE_API_SCANNER': False,
+            'CON5013_API_ALLOW_EXTERNAL': False,
             'CON5013_ALLOW_LOG_CLEAR': False,
             'CON5013_AUTO_INJECT': False,
             'CON5013_OVERLAY_MODE': False,
@@ -127,7 +128,9 @@ class Con5013:
             'CON5013_API_TEST_TIMEOUT': 10,
             'CON5013_API_INCLUDE_METHODS': ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
             'CON5013_API_EXCLUDE_ENDPOINTS': ['/static', '/con5013'],
-            
+            'CON5013_API_ALLOW_EXTERNAL': True,
+            'CON5013_API_EXTERNAL_ALLOWLIST': [],
+
             # System monitoring
             'CON5013_SYSTEM_UPDATE_INTERVAL': 5,
             'CON5013_MONITOR_SYSTEM_INFO': True,

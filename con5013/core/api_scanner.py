@@ -6,7 +6,7 @@ Automatic API endpoint discovery and testing for Flask applications.
 import time
 import requests
 import re
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Iterable, Tuple
 from urllib.parse import urljoin, urlparse
 
 class APIScanner:
@@ -25,7 +25,47 @@ class APIScanner:
         # Show Con5013 endpoints by default so users can inspect and test them too
         self.exclude_endpoints = config.get('CON5013_API_EXCLUDE_ENDPOINTS', ['/static'])
         self.base_url = None
-        
+
+    @staticmethod
+    def normalize_allowlist(allowlist: Optional[Iterable[Any]]) -> List[str]:
+        """Normalize an allowlist configuration value to a list of strings."""
+        if not allowlist:
+            return []
+        if isinstance(allowlist, (str, bytes)):
+            allowlist = [allowlist]
+
+        normalized: List[str] = []
+        for item in allowlist:
+            if item is None:
+                continue
+            text = str(item).strip()
+            if text:
+                normalized.append(text)
+        return normalized
+
+    @classmethod
+    def describe_policy_from_config(cls, config: Dict[str, Any]) -> Dict[str, Any]:
+        """Return a human-readable snapshot of the external scanning policy."""
+        allow_external = bool(config.get('CON5013_API_ALLOW_EXTERNAL', True))
+        allowlist = cls.normalize_allowlist(config.get('CON5013_API_EXTERNAL_ALLOWLIST'))
+
+        if not allow_external:
+            mode = 'disabled'
+        elif allowlist:
+            mode = 'allowlist'
+        else:
+            mode = 'allow_all'
+
+        return {
+            'allow_external': allow_external,
+            'external_allowlist': allowlist,
+            'mode': mode,
+        }
+
+    def get_external_policy(self) -> Dict[str, Any]:
+        """Expose the currently active external scanning policy."""
+        return self.describe_policy_from_config(self.config)
+
     def _get_base_url(self) -> str:
         """Get the base URL for the application."""
         if self.base_url:
@@ -192,14 +232,28 @@ class APIScanner:
 
         return pattern.sub(repl, path)
     
-    def test_endpoint(self, endpoint_url: str, method: str = 'GET', 
+    def test_endpoint(self, endpoint_url: str, method: str = 'GET',
                      data: Optional[Dict] = None, headers: Optional[Dict] = None) -> Dict[str, Any]:
         """Test a specific API endpoint."""
         start_time = time.time()
-        
+
         try:
             method_up = method.upper()
             is_absolute = endpoint_url.lower().startswith('http://') or endpoint_url.lower().startswith('https://')
+            policy = None
+
+            if is_absolute:
+                allowed, reason, policy = self._check_external_policy(endpoint_url)
+                if not allowed:
+                    return {
+                        'status': 'blocked',
+                        'status_code': None,
+                        'error': reason,
+                        'response_time_ms': round((time.time() - start_time) * 1000, 2),
+                        'timestamp': time.time(),
+                        'policy': policy or self.get_external_policy(),
+                    }
+
             # Prefer Flask test client for app-local routes (relative OR absolute pointing to our base)
             if (not is_absolute) or self._is_local_url(endpoint_url):
                 # Call using Flask test client for app-relative paths
@@ -294,6 +348,76 @@ class APIScanner:
                 'response_time_ms': (time.time() - start_time) * 1000,
                 'timestamp': time.time()
             }
+
+    def _check_external_policy(self, url: str) -> Tuple[bool, Optional[str], Dict[str, Any]]:
+        """Validate that an external URL complies with the configured policy."""
+        policy = self.get_external_policy()
+
+        if self._is_local_url(url):
+            return True, None, policy
+
+        is_absolute = url.lower().startswith('http://') or url.lower().startswith('https://')
+        if not is_absolute:
+            return True, None, policy
+
+        if not policy.get('allow_external', True):
+            return False, 'External API testing is disabled by configuration (CON5013_API_ALLOW_EXTERNAL=False).', policy
+
+        allowlist = policy.get('external_allowlist', [])
+        if allowlist and not self._is_url_allowlisted(url, allowlist):
+            return False, 'The requested URL is not present in CON5013_API_EXTERNAL_ALLOWLIST.', policy
+
+        return True, None, policy
+
+    def _is_url_allowlisted(self, url: str, allowlist: List[str]) -> bool:
+        """Return True when the given absolute URL matches an allowlisted entry."""
+        try:
+            parsed = urlparse(url)
+        except Exception:
+            return False
+
+        if not parsed.scheme or not parsed.netloc:
+            return False
+
+        path = parsed.path or '/'
+        query = parsed.query
+
+        for entry in allowlist:
+            entry_str = str(entry)
+            if not entry_str:
+                continue
+
+            if url == entry_str:
+                return True
+
+            try:
+                entry_parsed = urlparse(entry_str)
+            except Exception:
+                continue
+
+            if not entry_parsed.scheme or not entry_parsed.netloc:
+                continue
+
+            if parsed.scheme != entry_parsed.scheme or parsed.netloc != entry_parsed.netloc:
+                continue
+
+            if entry_parsed.query:
+                if query != entry_parsed.query:
+                    continue
+            allow_path = entry_parsed.path or '/'
+            if allow_path in ('', '/'):
+                return True
+
+            normalized_allow = allow_path.rstrip('/')
+            normalized_path = path.rstrip('/')
+
+            if normalized_path == normalized_allow:
+                return True
+
+            if normalized_allow and path.startswith(normalized_allow + '/'):
+                return True
+
+        return False
     
     def test_all_endpoints(self, include_con5013: Optional[bool] = None) -> Dict[str, Any]:
         """Test all discovered endpoints."""
