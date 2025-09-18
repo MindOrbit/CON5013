@@ -58,10 +58,28 @@ class Con5013:
         })
     """
     
+    SECURITY_PRESETS = {
+        'secured': {
+            'CON5013_ENABLE_TERMINAL': False,
+            'CON5013_ENABLE_API_SCANNER': False,
+            'CON5013_ALLOW_LOG_CLEAR': False,
+            'CON5013_AUTO_INJECT': False,
+            'CON5013_OVERLAY_MODE': False,
+            'CON5013_CRAWL4AI_INTEGRATION': False,
+            'CON5013_WEBSOCKET_SUPPORT': False,
+            'CON5013_TERMINAL_ALLOW_PY': False,
+        }
+    }
+
     def __init__(self, app=None, **kwargs):
         self.app = app
         self.config = self._get_default_config()
-        self.config.update(kwargs.get('config', {}))
+        self._explicit_overrides = set()
+
+        initial_config = kwargs.get('config', {}) or {}
+        if initial_config:
+            self._explicit_overrides.update(initial_config.keys())
+            self.config.update(initial_config)
         
         # Core components
         self.log_monitor = None
@@ -84,23 +102,26 @@ class Con5013:
             'CON5013_ENABLED': True,
             'CON5013_CAPTURE_ROOT_LOGGER': True,
             'CON5013_CAPTURE_LOGGERS': ['werkzeug', 'flask.app'],
-            
+            'CON5013_SECURITY_PROFILE': 'open',
+
             # Feature toggles
             'CON5013_ENABLE_LOGS': True,
             'CON5013_ENABLE_TERMINAL': True,
             'CON5013_ENABLE_API_SCANNER': True,
             'CON5013_ENABLE_SYSTEM_MONITOR': True,
-            
+
             # Logging configuration
             'CON5013_LOG_SOURCES': ['app.log'],
             'CON5013_LOG_LEVELS': ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
             'CON5013_MAX_LOG_ENTRIES': 1000,
             'CON5013_REAL_TIME_LOGS': True,
-            
+            'CON5013_ALLOW_LOG_CLEAR': True,
+
             # Terminal configuration
             'CON5013_TERMINAL_HISTORY_SIZE': 100,
             'CON5013_TERMINAL_TIMEOUT': 30,
             'CON5013_CUSTOM_COMMANDS': {},
+            'CON5013_TERMINAL_ALLOW_PY': False,
             
             # API Scanner configuration
             'CON5013_API_TEST_TIMEOUT': 10,
@@ -145,11 +166,24 @@ class Con5013:
     def init_app(self, app: Flask):
         """Initialize Con5013 with a Flask application."""
         self.app = app
-        
+
         # Update config from Flask app config
-        for key, default_value in self.config.items():
-            self.config[key] = app.config.get(key, default_value)
-        
+        for key, default_value in list(self.config.items()):
+            if key in app.config:
+                self.config[key] = app.config[key]
+                self._explicit_overrides.add(key)
+            else:
+                self.config[key] = default_value
+
+        # Merge any additional CON5013_* configuration keys defined on the app
+        for key, value in app.config.items():
+            if key.startswith('CON5013_') and key not in self.config:
+                self.config[key] = value
+                self._explicit_overrides.add(key)
+
+        # Apply security profile presets after merging configuration
+        self.apply_security_profile(self.config.get('CON5013_SECURITY_PROFILE'))
+
         # Skip initialization if disabled
         if not self.config['CON5013_ENABLED']:
             logger.info("Con5013 is disabled via configuration")
@@ -188,6 +222,54 @@ class Con5013:
             self._setup_crawl4ai_integration()
         
         logger.info(f"Con5013 initialized successfully on {self.config['CON5013_URL_PREFIX']}")
+
+    def apply_security_profile(self, profile: Optional[str] = None, *, respect_overrides: bool = True,
+                               extra_overrides: Optional[Iterable[str]] = None) -> str:
+        """Apply a security profile to adjust high-impact configuration flags.
+
+        Parameters
+        ----------
+        profile:
+            Name of the security profile to apply. Defaults to the configured
+            ``CON5013_SECURITY_PROFILE``.
+        respect_overrides:
+            When ``True`` (default), configuration keys explicitly overridden
+            by the developer are preserved.
+        extra_overrides:
+            Optional iterable of additional keys to treat as overrides for this
+            invocation only.
+
+        Returns
+        -------
+        str
+            The normalized profile name that was applied.
+        """
+
+        normalized = (profile or self.config.get('CON5013_SECURITY_PROFILE', 'open') or 'open')
+        if not isinstance(normalized, str):
+            normalized = str(normalized)
+        normalized = normalized.lower().strip()
+        if normalized not in self.SECURITY_PRESETS:
+            normalized = 'open'
+
+        self.config['CON5013_SECURITY_PROFILE'] = normalized
+
+        if normalized == 'open':
+            return normalized
+
+        presets = self.SECURITY_PRESETS.get(normalized, {})
+        preserved = set(self._explicit_overrides)
+        if extra_overrides:
+            preserved.update(extra_overrides)
+            if respect_overrides:
+                self._explicit_overrides.update(extra_overrides)
+
+        for key, value in presets.items():
+            if respect_overrides and key in preserved:
+                continue
+            self.config[key] = value
+
+        return normalized
     
     def _initialize_components(self):
         """Initialize all core components."""
