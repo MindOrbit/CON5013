@@ -115,6 +115,26 @@ app.config.update(
 Con5013(app)
 ```
 
+For a faster hardening pass, set `CON5013_SECURITY_PROFILE` to `"secured"`. The
+secured profile disables terminal execution, API scanning, log clearing
+(`CON5013_ALLOW_LOG_CLEAR`), auto-injection, overlay mode, Crawl4AI helpers, web
+socket hooks, and Python evaluation unless you explicitly override them.
+
+```python
+import os
+
+app = Flask(__name__)
+profile = 'secured' if os.getenv('FLASK_ENV') == 'production' else 'open'
+app.config['CON5013_SECURITY_PROFILE'] = profile
+
+console = Con5013(app)
+
+# Re-enable selected features after applying the profile if required
+if profile == 'secured':
+    console.apply_security_profile('secured', extra_overrides={'CON5013_ENABLE_TERMINAL'})
+    console.config['CON5013_ENABLE_TERMINAL'] = True
+```
+
 Refer to the defaults in `Con5013._get_default_config()` for the complete list of toggles, including API scanner, system monitor, Crawl4AI, and websocket options.
 
 ## Template and Overlay Integration

@@ -209,6 +209,9 @@ def create_app() -> Flask:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
     app.logger.setLevel(logging.INFO)
 
+    environment = os.getenv("FLASK_ENV", "development")
+    security_profile = "secured" if environment == "production" else "open"
+
     console = Con5013(
         app,
         config={
@@ -220,8 +223,15 @@ def create_app() -> Flask:
             "CON5013_LOG_SOURCES": ["example_app.log"],
             "CON5013_MONITOR_GPU": True,
             "CON5013_SYSTEM_CUSTOM_BOXES": [],
+            "CON5013_SECURITY_PROFILE": security_profile,
         },
     )
+
+    if security_profile == "secured":
+        # Keep the interactive terminal available during demos while the
+        # profile hardens other features such as log clearing and auto-inject.
+        console.apply_security_profile("secured", extra_overrides={"CON5013_ENABLE_TERMINAL"})
+        console.config["CON5013_ENABLE_TERMINAL"] = True
 
     # Attach an additional logger so the Logs tab showcases multiple sources.
     worker_logger = logging.getLogger("demo.worker")

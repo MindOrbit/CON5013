@@ -39,11 +39,46 @@ class TestCon5013(unittest.TestCase):
             'CON5013_ENABLE_TERMINAL': False
         }
         console = Con5013(self.app, config=config)
-        
+
         self.assertEqual(console.config['CON5013_URL_PREFIX'], '/admin/console')
         self.assertEqual(console.config['CON5013_THEME'], 'light')
         self.assertEqual(console.config['CON5013_ENABLE_TERMINAL'], False)
-        
+
+    def test_security_profile_secured_disables_sensitive_features(self):
+        """The secured profile should turn off high-impact capabilities."""
+        self.app.config['CON5013_SECURITY_PROFILE'] = 'secured'
+        console = Con5013(self.app)
+
+        self.assertEqual(console.config['CON5013_SECURITY_PROFILE'], 'secured')
+        self.assertFalse(console.config['CON5013_ENABLE_TERMINAL'])
+        self.assertFalse(console.config['CON5013_ENABLE_API_SCANNER'])
+        self.assertFalse(console.config['CON5013_ALLOW_LOG_CLEAR'])
+        self.assertFalse(console.config['CON5013_AUTO_INJECT'])
+        self.assertFalse(console.config['CON5013_OVERLAY_MODE'])
+        self.assertFalse(console.config['CON5013_TERMINAL_ALLOW_PY'])
+
+    def test_security_profile_respects_overrides(self):
+        """Explicit configuration overrides should win over profile presets."""
+        self.app.config['CON5013_SECURITY_PROFILE'] = 'secured'
+        self.app.config['CON5013_ENABLE_TERMINAL'] = True
+        self.app.config['CON5013_ALLOW_LOG_CLEAR'] = True
+
+        console = Con5013(self.app)
+
+        self.assertTrue(console.config['CON5013_ENABLE_TERMINAL'])
+        self.assertTrue(console.config['CON5013_ALLOW_LOG_CLEAR'])
+
+    def test_apply_security_profile_helper(self):
+        """Developers can switch profiles programmatically and override after."""
+        console = Con5013()
+        console.apply_security_profile('secured')
+        self.assertFalse(console.config['CON5013_ENABLE_TERMINAL'])
+
+        # Override after applying profile
+        console.config['CON5013_ENABLE_TERMINAL'] = True
+        console.apply_security_profile('secured', extra_overrides={'CON5013_ENABLE_TERMINAL'})
+        self.assertTrue(console.config['CON5013_ENABLE_TERMINAL'])
+
     def test_con5013_disabled(self):
         """Test Con5013 when disabled via configuration."""
         self.app.config['CON5013_ENABLED'] = False

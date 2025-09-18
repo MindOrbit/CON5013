@@ -350,6 +350,42 @@ Con5013(app, config={
 })
 ```
 
+### Security Profiles
+
+To simplify hardening the console for hosted environments, Con5013 now ships with
+`CON5013_SECURITY_PROFILE`. The default profile is `"open"`, which preserves the
+behaviour demonstrated throughout the README. Switching to `"secured"` disables
+high-impact features (terminal execution, API scanning, log clearing via
+`CON5013_ALLOW_LOG_CLEAR`, auto-injection, overlay mode, Crawl4AI hooks, web
+socket helpers, and Python evaluation) unless you explicitly override them.
+
+Pick a profile per environment during initialization:
+
+```python
+import os
+
+environment = os.getenv('FLASK_ENV', 'development')
+profile = 'secured' if environment == 'production' else 'open'
+
+console = Con5013(app, config={
+    'CON5013_SECURITY_PROFILE': profile,
+    # You can still provide explicit overrides alongside the profile
+    'CON5013_ENABLE_LOGS': True,
+})
+
+# Adjust at runtime if needed
+if profile == 'secured':
+    # Re-enable just the terminal for trusted operators
+    console.apply_security_profile('secured', extra_overrides={'CON5013_ENABLE_TERMINAL'})
+    console.config['CON5013_ENABLE_TERMINAL'] = True
+```
+
+The helper `console.apply_security_profile(...)` can also be called later if you
+need to harden or relax the console dynamically (for example, during an incident
+response window). Settings you tweak afterward remain in effect until you reapply
+the profile—pass `extra_overrides={'CON5013_ENABLE_TERMINAL', ...}` when calling
+the helper to mark them as preserved on subsequent invocations.
+
 ### Authentication Options
 
 Protect the console and API routes by enabling built-in authentication modes. All checks are executed before every Con5013 request, returning JSON for API failures and a themed HTML error page for UI requests.

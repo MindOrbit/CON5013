@@ -116,11 +116,12 @@ def api_log_sources():
 def api_clear_logs():
     """Clear logs for a specific source."""
     con5013 = get_con5013_instance()
-    if not con5013.config.get('CON5013_ENABLE_LOGS', True):
+    if not con5013.config.get('CON5013_ENABLE_LOGS', True) \
+            or not con5013.config.get('CON5013_ALLOW_LOG_CLEAR', True):
         abort(404)
     data = request.get_json() or {}
     source = data.get('source', 'app')
-    
+
     try:
         if con5013.log_monitor:
             con5013.log_monitor.clear_logs(source)
@@ -443,22 +444,24 @@ def api_info():
         'url_prefix': con5013.config['CON5013_URL_PREFIX'],
         'theme': con5013.config['CON5013_THEME'],
         'default_log_source': con5013.config.get('CON5013_DEFAULT_LOG_SOURCE'),
-            'features': {
-                'logs': con5013.config['CON5013_ENABLE_LOGS'],
-                'terminal': con5013.config['CON5013_ENABLE_TERMINAL'],
-                'api_scanner': con5013.config['CON5013_ENABLE_API_SCANNER'],
-                'system_monitor': con5013.config['CON5013_ENABLE_SYSTEM_MONITOR'],
-                'system_monitor_metrics': {
-                    'system_info': con5013.config.get('CON5013_MONITOR_SYSTEM_INFO', True),
-                    'application': con5013.config.get('CON5013_MONITOR_APPLICATION', True),
-                    'cpu': con5013.config.get('CON5013_MONITOR_CPU', True),
-                    'memory': con5013.config.get('CON5013_MONITOR_MEMORY', True),
-                    'disk': con5013.config.get('CON5013_MONITOR_DISK', True),
-                    'network': con5013.config.get('CON5013_MONITOR_NETWORK', True),
-                    'gpu': con5013.config.get('CON5013_MONITOR_GPU', True),
+        'features': {
+            'logs': con5013.config['CON5013_ENABLE_LOGS'],
+            'terminal': con5013.config['CON5013_ENABLE_TERMINAL'],
+            'api_scanner': con5013.config['CON5013_ENABLE_API_SCANNER'],
+            'system_monitor': con5013.config['CON5013_ENABLE_SYSTEM_MONITOR'],
+            'allow_log_clear': con5013.config.get('CON5013_ALLOW_LOG_CLEAR', True),
+            'system_monitor_metrics': {
+                'system_info': con5013.config.get('CON5013_MONITOR_SYSTEM_INFO', True),
+                'application': con5013.config.get('CON5013_MONITOR_APPLICATION', True),
+                'cpu': con5013.config.get('CON5013_MONITOR_CPU', True),
+                'memory': con5013.config.get('CON5013_MONITOR_MEMORY', True),
+                'disk': con5013.config.get('CON5013_MONITOR_DISK', True),
+                'network': con5013.config.get('CON5013_MONITOR_NETWORK', True),
+                'gpu': con5013.config.get('CON5013_MONITOR_GPU', True),
             },
-            'crawl4ai_integration': con5013.config['CON5013_CRAWL4AI_INTEGRATION'],
         },
+        'crawl4ai_integration': con5013.config['CON5013_CRAWL4AI_INTEGRATION'],
+        'security_profile': con5013.config.get('CON5013_SECURITY_PROFILE', 'open'),
         'endpoints': {
             'console': con5013.config['CON5013_URL_PREFIX'] + '/',
             'overlay': con5013.config['CON5013_URL_PREFIX'] + '/overlay',

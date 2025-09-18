@@ -98,6 +98,7 @@ class Con5013Console {
             terminal: true,
             api_scanner: true,
             system_monitor: true,
+            allow_log_clear: true,
         };
         this.systemMetrics = {
             system_info: true,
@@ -277,7 +278,7 @@ class Con5013Console {
                                     <option value="asc">Oldest first</option>
                                 </select>
                                 <button class="con5013-btn" onclick="con5013.refreshLogs()">Refresh</button>
-                                <button class="con5013-btn secondary" onclick="con5013.clearLogs()">Clear</button>
+                                <button class="con5013-btn secondary" data-con5013-clear-logs onclick="con5013.clearLogs()">Clear</button>
                                 <button class="con5013-btn secondary" onclick="con5013.exportLogs()">Export</button>
                             </div>
                             
@@ -712,7 +713,10 @@ class Con5013Console {
             const res = await fetch(`${this.options.baseUrl}/api/info`);
             const payload = await res.json();
             if (payload && payload.info && payload.info.features) {
-                this.features = payload.info.features;
+                this.features = {
+                    ...this.features,
+                    ...payload.info.features,
+                };
                 this.updateSystemMetrics(payload.info.features.system_monitor_metrics);
             }
             if (payload && payload.info && payload.info.default_log_source) {
@@ -780,7 +784,25 @@ class Con5013Console {
         hideTab('api', !!this.features.api_scanner);
         hideTab('system', !!this.features.system_monitor);
 
+        this.updateLogControls();
         this.applySystemMetricToggles();
+    }
+
+    updateLogControls() {
+        const clearBtn = document.querySelector('[data-con5013-clear-logs]');
+        if (!clearBtn) return;
+
+        const allowed = !!this.features.logs && !!this.features.allow_log_clear;
+        clearBtn.classList.toggle('con5013-hidden', !allowed);
+        if (allowed) {
+            clearBtn.removeAttribute('disabled');
+            clearBtn.removeAttribute('aria-hidden');
+            clearBtn.removeAttribute('hidden');
+        } else {
+            clearBtn.setAttribute('disabled', 'disabled');
+            clearBtn.setAttribute('aria-hidden', 'true');
+            clearBtn.setAttribute('hidden', '');
+        }
     }
 
     updateSystemMetrics(settings = {}) {
@@ -1087,11 +1109,17 @@ class Con5013Console {
     }
 
     async clearLogs() {
+        if (!this.features.allow_log_clear || !this.features.logs) {
+            console.warn('Con5013: log clearing is disabled by configuration');
+            return;
+        }
         try {
+            const sourceSelect = document.getElementById('con5013-log-source');
+            const source = sourceSelect?.value || this.currentLogSource || 'app';
             await fetch(`${this.options.baseUrl}/api/logs/clear`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ source: this.currentLogSource || 'app' })
+                body: JSON.stringify({ source })
             });
             this.refreshLogs();
         } catch (e) {
