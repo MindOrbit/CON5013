@@ -64,6 +64,37 @@ EXPERIENCE_STEPS = [
 ]
 
 
+ROLE_LABELS = {
+    "observer": "Observer",
+    "engineer": "Engineer",
+    "admin": "Admin",
+}
+
+
+SIMULATED_FEATURES = [
+    {
+        "name": "Log viewer",
+        "endpoint": "con5013.logs",
+        "description": "Inspect immutable application logs captured by the secured profile.",
+    },
+    {
+        "name": "System monitor",
+        "endpoint": "con5013.system_monitor",
+        "description": "Review CPU, memory, and request counters without shelling into the host.",
+    },
+    {
+        "name": "API scanner",
+        "endpoint": "api_scanner.index",
+        "description": "Enumerate Flask routes to understand which surfaces are exposed.",
+    },
+    {
+        "name": "Interactive terminal",
+        "endpoint": "api_terminal.execute",
+        "description": "Break-glass capability for administrators when deeper debugging is required.",
+    },
+]
+
+
 LANDING_TEMPLATE = """<!doctype html>
 <html lang=\"en\">
   <head>
@@ -295,6 +326,134 @@ LANDING_TEMPLATE = """<!doctype html>
         font-weight: 600;
       }
 
+      section.interactive {
+        margin-top: 32px;
+        padding: 24px;
+        border-radius: 20px;
+        border: 1px solid rgba(96, 165, 250, 0.28);
+        background: rgba(14, 24, 52, 0.75);
+        box-shadow: inset 0 1px 0 rgba(148, 163, 184, 0.08);
+        display: grid;
+        gap: 18px;
+      }
+
+      section.interactive h3 {
+        margin: 0;
+        font-size: 1.2rem;
+      }
+
+      .mode-selector,
+      .role-selector {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .mode-selector button,
+      .role-selector button {
+        background: rgba(30, 64, 175, 0.15);
+        border: 1px solid rgba(96, 165, 250, 0.45);
+        color: inherit;
+        border-radius: 12px;
+        padding: 10px 16px;
+        cursor: pointer;
+        font-size: 0.95rem;
+        transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+      }
+
+      .mode-selector button:hover,
+      .role-selector button:hover {
+        transform: translateY(-1px);
+        border-color: rgba(148, 163, 184, 0.65);
+      }
+
+      .mode-selector button.active,
+      .role-selector button.active {
+        background: rgba(59, 130, 246, 0.25);
+        border-color: rgba(96, 165, 250, 0.85);
+        box-shadow: 0 14px 30px -22px rgba(59, 130, 246, 0.9);
+      }
+
+      .role-selector span.label {
+        align-self: center;
+        color: var(--muted);
+        font-size: 0.9rem;
+        margin-right: 4px;
+      }
+
+      .experience-result h4 {
+        margin: 0;
+        font-size: 1.15rem;
+      }
+
+      .experience-result h5 {
+        margin: 12px 0 8px;
+        font-size: 0.95rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+      }
+
+      .experience-result p.description {
+        color: var(--muted);
+        line-height: 1.5;
+        margin: 6px 0 18px;
+      }
+
+      .feature-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 12px;
+        margin: 18px 0 8px;
+      }
+
+      .feature {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 12px;
+        padding: 16px;
+        border-radius: 14px;
+        border: 1px solid rgba(96, 165, 250, 0.3);
+        background: rgba(12, 22, 44, 0.85);
+        align-items: start;
+      }
+
+      .feature .status {
+        font-size: 1.25rem;
+        font-weight: 600;
+      }
+
+      .feature.allowed .status {
+        color: var(--success);
+      }
+
+      .feature.blocked {
+        border-color: rgba(248, 113, 113, 0.5);
+        background: rgba(127, 29, 29, 0.25);
+      }
+
+      .feature.blocked .status {
+        color: var(--danger);
+      }
+
+      .feature p {
+        margin: 4px 0 0;
+        color: var(--muted);
+        font-size: 0.9rem;
+        line-height: 1.45;
+      }
+
+      .code-block {
+        background: rgba(15, 23, 42, 0.85);
+        border-radius: 12px;
+        border: 1px solid rgba(96, 165, 250, 0.35);
+        padding: 14px 16px;
+        font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size: 0.85rem;
+        overflow-x: auto;
+        margin-top: 12px;
+      }
+
       footer {
         text-align: center;
         font-size: 0.84rem;
@@ -401,6 +560,161 @@ LANDING_TEMPLATE = """<!doctype html>
         return actions.map((action) => `<a class="cta" href="${action.href}" target="_blank" rel="noreferrer">${action.label}</a>`).join('');
       }
 
+      function renderAccessMatrix(items) {
+        if (!Array.isArray(items) || !items.length) {
+          return '';
+        }
+
+        return `<div class="feature-grid">${items.map((item) => `
+          <div class="feature ${item.allowed ? 'allowed' : 'blocked'}">
+            <div class="status" aria-hidden="true">${item.allowed ? '✓' : '✕'}</div>
+            <div>
+              <strong>${item.name ?? ''}</strong>
+              ${item.description ? `<p>${item.description}</p>` : ''}
+            </div>
+          </div>
+        `).join('')}</div>`;
+      }
+
+      function mountInteractiveExperience(container, interactive) {
+        if (!interactive || interactive.type !== 'auth-modes') {
+          return;
+        }
+
+        const section = document.createElement('section');
+        section.className = 'interactive auth-modes';
+        section.innerHTML = `
+          <h3>${interactive.heading ?? 'Simulate each authentication mode'}</h3>
+          ${interactive.description ? `<p class="description">${interactive.description}</p>` : ''}
+          <div class="mode-selector">
+            ${interactive.modes.map((mode) => `<button class="mode-btn" data-mode="${mode.id}">${mode.label}</button>`).join('')}
+          </div>
+          <div class="role-selector" ${interactive.roleOptions?.length ? '' : 'hidden'}>
+            <span class="label">Roles:</span>
+            ${interactive.roleOptions?.map((role) => `<button class="role-btn" data-role="${role.id}">${role.label}</button>`).join('') ?? ''}
+          </div>
+          <div class="experience-result">
+            <p class="description">Choose a mode to preview the operator journey.</p>
+          </div>
+        `;
+
+        container.appendChild(section);
+
+        const modeButtons = Array.from(section.querySelectorAll('.mode-btn'));
+        const roleButtons = Array.from(section.querySelectorAll('.role-btn'));
+        const roleWrapper = section.querySelector('.role-selector');
+        const result = section.querySelector('.experience-result');
+
+        const defaultMode = interactive.defaultMode ?? (modeButtons[0] && modeButtons[0].dataset.mode);
+        let currentMode = defaultMode;
+        let currentRole = interactive.roleOptions?.[0]?.id ?? null;
+
+        function setActive(buttons, targetAttr, value) {
+          buttons.forEach((btn) => {
+            btn.classList.toggle('active', btn.dataset[targetAttr] === value);
+          });
+        }
+
+        function showRoleSelector() {
+          if (!roleButtons.length) {
+            roleWrapper.hidden = true;
+            return;
+          }
+
+          if (currentMode === 'callback') {
+            roleWrapper.hidden = false;
+            if (!roleButtons.some((btn) => btn.dataset.role === currentRole)) {
+              currentRole = roleButtons[0].dataset.role;
+            }
+            setActive(roleButtons, 'role', currentRole);
+          } else {
+            roleWrapper.hidden = true;
+          }
+        }
+
+        async function fetchExperience() {
+          if (!currentMode) {
+            return;
+          }
+
+          const params = new URLSearchParams({ mode: currentMode });
+          if (currentMode === 'callback' && currentRole) {
+            params.set('role', currentRole);
+          }
+
+          try {
+            result.innerHTML = '<p class="description">Loading experience…</p>';
+            const response = await fetch(`${interactive.endpoint}?${params.toString()}`, { headers: { 'Accept': 'application/json' } });
+            if (!response.ok) {
+              throw new Error(`Request failed with status ${response.status}`);
+            }
+
+            const payload = await response.json();
+            const sections = [];
+
+            sections.push(`<h4>${payload.title ?? 'Authentication preview'}</h4>`);
+            if (payload.subtitle) {
+              sections.push(`<p class="description">${payload.subtitle}</p>`);
+            }
+
+            const detailHighlights = [];
+            if (Array.isArray(payload.credentials)) {
+              detailHighlights.push(...payload.credentials);
+            }
+            if (Array.isArray(payload.headers)) {
+              detailHighlights.push(...payload.headers);
+            }
+
+            if (detailHighlights.length) {
+              sections.push('<h5>How to authenticate</h5>');
+              sections.push(renderHighlights(detailHighlights));
+            }
+
+            if (Array.isArray(payload.notes) && payload.notes.length) {
+              sections.push('<h5>What to expect</h5>');
+              sections.push(renderList(payload.notes, 'bullets'));
+            }
+
+            if (Array.isArray(payload.access) && payload.access.length) {
+              sections.push('<h5>Console access</h5>');
+              sections.push(renderAccessMatrix(payload.access));
+            }
+
+            if (payload.sample) {
+              sections.push('<h5>Try it from your terminal</h5>');
+              sections.push(`<pre class="code-block">${payload.sample}</pre>`);
+            }
+
+            result.innerHTML = sections.join('');
+          } catch (error) {
+            result.innerHTML = `<p class="description">${error.message}</p>`;
+          }
+        }
+
+        modeButtons.forEach((button) => {
+          button.addEventListener('click', () => {
+            currentMode = button.dataset.mode;
+            setActive(modeButtons, 'mode', currentMode);
+            showRoleSelector();
+            fetchExperience();
+          });
+        });
+
+        roleButtons.forEach((button) => {
+          button.addEventListener('click', () => {
+            currentRole = button.dataset.role;
+            setActive(roleButtons, 'role', currentRole);
+            fetchExperience();
+          });
+        });
+
+        if (currentMode) {
+          setActive(modeButtons, 'mode', currentMode);
+        }
+        showRoleSelector();
+        fetchExperience();
+      }
+
       function renderTimeline(events) {
         if (!Array.isArray(events) || !events.length) {
           return '';
@@ -436,6 +750,10 @@ LANDING_TEMPLATE = """<!doctype html>
             ${renderList(data.callouts ?? [], 'bullets')}
             ${renderActions(data.actions ?? [])}
           `;
+
+          if (data.interactive) {
+            mountInteractiveExperience(panel, data.interactive);
+          }
         } catch (error) {
           panel.innerHTML = `
             <h2>We could not load that step</h2>
@@ -595,6 +913,22 @@ def register_routes(app: Flask) -> None:
             }
         ]
 
+        interactive = {
+            "type": "auth-modes",
+            "endpoint": "/demo/auth/experience",
+            "heading": "Hands-on authentication sandbox",
+            "description": "Click a mode to load credentials, sample requests, and the console access it unlocks.",
+            "modes": [
+                {"id": "basic", "label": "Basic (username/password)"},
+                {"id": "token", "label": "Token (Bearer)"},
+                {"id": "callback", "label": "Callback (header roles)"},
+            ],
+            "roleOptions": [
+                {"id": key, "label": value} for key, value in ROLE_LABELS.items()
+            ],
+            "defaultMode": active_mode,
+        }
+
         return jsonify(
             {
                 "title": "Authentication options for every team",
@@ -603,6 +937,112 @@ def register_routes(app: Flask) -> None:
                 "bullets": bullets,
                 "callouts": callouts,
                 "actions": actions,
+                "interactive": interactive,
+            }
+        )
+
+    @app.get("/demo/auth/experience")
+    def demo_auth_experience() -> Any:
+        mode = (request.args.get("mode", "basic") or "basic").strip().lower()
+        role = (request.args.get("role", "observer") or "observer").strip().lower()
+
+        if mode not in {"basic", "token", "callback"}:
+            return jsonify({"error": f"Unknown authentication mode: {mode}"}), 400
+
+        if mode in {"basic", "token"}:
+            features = [
+                {
+                    "name": feature["name"],
+                    "description": feature["description"],
+                    "allowed": feature["endpoint"] != "api_terminal.execute",
+                }
+                for feature in SIMULATED_FEATURES
+            ]
+
+            if mode == "basic":
+                user = app.config.get("CON5013_AUTH_USER", "ops")
+                password = app.config.get("CON5013_AUTH_PASSWORD", "change-me")
+                return jsonify(
+                    {
+                        "mode": mode,
+                        "title": "Basic authentication",
+                        "subtitle": "Great for small on-call rotations that sign in with shared credentials.",
+                        "credentials": [
+                            {"label": "Username", "value": user},
+                            {"label": "Password", "value": password, "description": "Rotate through your secrets manager."},
+                        ],
+                        "notes": [
+                            "Pair with network-level protections or a VPN when exposing the console.",
+                            "Force HTTPS so credentials stay encrypted in transit.",
+                        ],
+                        "access": features,
+                        "sample": f"curl -u {user}:{password} http://localhost:5000/health",
+                    }
+                )
+
+            token = app.config.get("CON5013_AUTH_TOKEN", "set-a-strong-token")
+            return jsonify(
+                {
+                    "mode": mode,
+                    "title": "Token authentication",
+                    "subtitle": "Ideal for API gateways, reverse proxies, or machine-to-machine control.",
+                    "headers": [
+                        {
+                            "label": "Authorization header",
+                            "value": f"Bearer {token}",
+                            "description": "Inject this header from your proxy or deployment platform.",
+                        }
+                    ],
+                    "notes": [
+                        "Rotate the token frequently and store it securely.",
+                        "Pair with IP allow-lists or mutual TLS for defense in depth.",
+                    ],
+                    "access": features,
+                    "sample": "curl -H \"Authorization: Bearer {}\" http://localhost:5000/metrics".format(token),
+                }
+            )
+
+        if role not in ROLE_LABELS:
+            role = "observer"
+
+        simulated_access = []
+        for feature in SIMULATED_FEATURES:
+            mock_request = _MockRequest(feature["endpoint"], role)
+            allowed = bool(_role_based_auth(mock_request))
+            simulated_access.append(
+                {
+                    "name": feature["name"],
+                    "description": feature["description"],
+                    "allowed": allowed,
+                }
+            )
+
+        role_label = ROLE_LABELS[role]
+        return jsonify(
+            {
+                "mode": mode,
+                "role": role,
+                "title": "Callback authentication",
+                "subtitle": f"Project your SSO or reverse proxy roles directly into CON5013 (currently previewing as {role_label}).",
+                "headers": [
+                    {
+                        "label": "X-Demo-User",
+                        "value": "<user@company>",
+                        "description": "Identifies the operator arriving from your identity provider.",
+                    },
+                    {
+                        "label": "X-Demo-Role",
+                        "value": role,
+                        "description": "Map SSO groups to observer, engineer, or admin capabilities.",
+                    },
+                ],
+                "notes": [
+                    "Observer keeps the console strictly read-only.",
+                    "Engineer unlocks the API scanner for deeper investigations.",
+                    "Admin can approve escalations that enable the terminal.",
+                ],
+                "access": simulated_access,
+                "sample": f"curl -H 'X-Demo-User: jane' -H 'X-Demo-Role: {role}' http://localhost:5000/whoami",
             }
         )
 
@@ -744,6 +1184,15 @@ def _role_based_auth(req: request) -> Any:
 
     # Allow everything else for authenticated users.
     return True
+
+
+class _MockRequest:
+    def __init__(self, endpoint: str, role: str) -> None:
+        self.endpoint = endpoint
+        self.headers = {
+            "X-Demo-User": "demo",
+            "X-Demo-Role": role,
+        }
 
 
 app = create_app()
