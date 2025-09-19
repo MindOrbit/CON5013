@@ -400,6 +400,133 @@ LANDING_TEMPLATE = """<!doctype html>
         margin: 6px 0 18px;
       }
 
+      .experience-layout {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 20px;
+        align-items: start;
+      }
+
+      .console-preview {
+        border-radius: 18px;
+        border: 1px solid rgba(96, 165, 250, 0.25);
+        background: radial-gradient(circle at top left, rgba(59, 130, 246, 0.16), transparent 55%),
+                    rgba(8, 15, 34, 0.85);
+        padding: 18px;
+        min-height: 220px;
+        box-shadow: inset 0 1px 0 rgba(148, 163, 184, 0.08);
+        display: grid;
+      }
+
+      .console-window {
+        border-radius: 16px;
+        overflow: hidden;
+        border: 1px solid rgba(96, 165, 250, 0.28);
+        background: rgba(9, 14, 29, 0.92);
+        display: grid;
+        grid-template-rows: auto 1fr;
+      }
+
+      .console-window header {
+        padding: 12px 16px;
+        background: linear-gradient(120deg, rgba(30, 58, 138, 0.72), rgba(30, 64, 175, 0.55));
+        border-bottom: 1px solid rgba(96, 165, 250, 0.28);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-weight: 600;
+        font-size: 0.95rem;
+      }
+
+      .console-window header span.mode {
+        padding: 4px 10px;
+        border-radius: 999px;
+        border: 1px solid rgba(148, 163, 184, 0.4);
+        background: rgba(30, 58, 138, 0.35);
+        font-size: 0.78rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .console-body {
+        padding: 18px;
+        display: grid;
+        gap: 18px;
+      }
+
+      .console-body .persona {
+        display: grid;
+        gap: 4px;
+      }
+
+      .console-body .persona strong {
+        font-size: 1.05rem;
+      }
+
+      .console-body .persona span {
+        color: var(--muted);
+        font-size: 0.85rem;
+      }
+
+      .console-panels {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 12px;
+      }
+
+      .console-panel {
+        border-radius: 12px;
+        border: 1px solid rgba(96, 165, 250, 0.22);
+        padding: 14px;
+        display: grid;
+        gap: 6px;
+        background: rgba(11, 20, 42, 0.85);
+        position: relative;
+        min-height: 110px;
+      }
+
+      .console-panel.allowed::before,
+      .console-panel.blocked::before {
+        content: attr(data-status);
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        font-size: 0.75rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        padding: 2px 8px;
+        border-radius: 999px;
+      }
+
+      .console-panel.allowed::before {
+        color: #34d399;
+        border: 1px solid rgba(52, 211, 153, 0.45);
+        background: rgba(22, 101, 52, 0.35);
+      }
+
+      .console-panel.blocked {
+        border-color: rgba(248, 113, 113, 0.45);
+        background: rgba(127, 29, 29, 0.25);
+      }
+
+      .console-panel.blocked::before {
+        color: #f87171;
+        border: 1px solid rgba(248, 113, 113, 0.4);
+        background: rgba(127, 29, 29, 0.25);
+      }
+
+      .console-panel h6 {
+        margin: 0;
+        font-size: 0.95rem;
+      }
+
+      .console-panel p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.8rem;
+        line-height: 1.45;
+      }
+
       .feature-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -576,6 +703,43 @@ LANDING_TEMPLATE = """<!doctype html>
         `).join('')}</div>`;
       }
 
+      function renderConsolePreview(access = [], preview = {}, mode = 'basic') {
+        const modeLabel = String(preview.mode ?? mode ?? 'mode').toUpperCase();
+        const title = preview.title ?? 'Console ready for access simulation';
+        const subtitle = preview.subtitle ?? 'Toggle authentication modes to see which panels appear.';
+
+        const panels = Array.isArray(access) && access.length
+          ? access.map((item) => {
+              const allowed = Boolean(item.allowed);
+              const status = allowed ? 'Allowed' : 'Locked';
+              return `
+                <div class="console-panel ${allowed ? 'allowed' : 'blocked'}" data-status="${status}">
+                  <h6>${item.name ?? ''}</h6>
+                  ${item.description ? `<p>${item.description}</p>` : ''}
+                </div>
+              `;
+            }).join('')
+          : '<p class="description">No console panels are enabled for this mode.</p>';
+
+        return `
+          <div class="console-window">
+            <header>
+              <span>CON5013 secure console</span>
+              <span class="mode">${modeLabel}</span>
+            </header>
+            <div class="console-body">
+              <div class="persona">
+                <strong>${title}</strong>
+                <span>${subtitle}</span>
+              </div>
+              <div class="console-panels">
+                ${panels}
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
       function mountInteractiveExperience(container, interactive) {
         if (!interactive || interactive.type !== 'auth-modes') {
           return;
@@ -593,8 +757,24 @@ LANDING_TEMPLATE = """<!doctype html>
             <span class="label">Roles:</span>
             ${interactive.roleOptions?.map((role) => `<button class="role-btn" data-role="${role.id}">${role.label}</button>`).join('') ?? ''}
           </div>
-          <div class="experience-result">
-            <p class="description">Choose a mode to preview the operator journey.</p>
+          <div class="experience-layout">
+            <div class="experience-result">
+              <p class="description">Choose a mode to preview the operator journey.</p>
+            </div>
+            <div class="console-preview" aria-live="polite">
+              <div class="console-window">
+                <header>
+                  <span>CON5013 secure console</span>
+                  <span class="mode">mode</span>
+                </header>
+                <div class="console-body">
+                  <div class="persona">
+                    <strong>Select a mode to render the console</strong>
+                    <span>The preview updates to mirror the simulated access level.</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         `;
 
@@ -604,6 +784,7 @@ LANDING_TEMPLATE = """<!doctype html>
         const roleButtons = Array.from(section.querySelectorAll('.role-btn'));
         const roleWrapper = section.querySelector('.role-selector');
         const result = section.querySelector('.experience-result');
+        const preview = section.querySelector('.console-preview');
 
         const defaultMode = interactive.defaultMode ?? (modeButtons[0] && modeButtons[0].dataset.mode);
         let currentMode = defaultMode;
@@ -686,8 +867,12 @@ LANDING_TEMPLATE = """<!doctype html>
             }
 
             result.innerHTML = sections.join('');
+
+            const previewHtml = renderConsolePreview(payload.access ?? [], payload.preview ?? {}, payload.mode ?? currentMode);
+            preview.innerHTML = previewHtml;
           } catch (error) {
             result.innerHTML = `<p class="description">${error.message}</p>`;
+            preview.innerHTML = `<div class="console-window"><header><span>CON5013 secure console</span><span class="mode">error</span></header><div class="console-body"><div class="persona"><strong>Preview unavailable</strong><span>${error.message}</span></div></div></div>`;
           }
         }
 
@@ -773,6 +958,24 @@ LANDING_TEMPLATE = """<!doctype html>
     </script>
   </body>
 </html>"""
+
+
+def _describe_mode(mode: str) -> str:
+    if mode == "basic":
+        return "basic"
+    if mode == "token":
+        return "token"
+    if mode == "callback":
+        return "callback"
+    return mode
+
+
+def _build_preview_payload(*, title: str, subtitle: str | None, mode: str) -> dict[str, str | None]:
+    return {
+        "title": title,
+        "subtitle": subtitle,
+        "mode": _describe_mode(mode),
+    }
 
 
 def create_app() -> Flask:
@@ -976,6 +1179,11 @@ def register_routes(app: Flask) -> None:
                             "Force HTTPS so credentials stay encrypted in transit.",
                         ],
                         "access": features,
+                        "preview": _build_preview_payload(
+                            title=f"Signed in as {user}",
+                            subtitle="Shared operator credential active.",
+                            mode=mode,
+                        ),
                         "sample": f"curl -u {user}:{password} http://localhost:5000/health",
                     }
                 )
@@ -998,6 +1206,11 @@ def register_routes(app: Flask) -> None:
                         "Pair with IP allow-lists or mutual TLS for defense in depth.",
                     ],
                     "access": features,
+                    "preview": _build_preview_payload(
+                        title="Automation token connected",
+                        subtitle="Bearer authentication presents a service account view.",
+                        mode=mode,
+                    ),
                     "sample": "curl -H \"Authorization: Bearer {}\" http://localhost:5000/metrics".format(token),
                 }
             )
@@ -1042,6 +1255,11 @@ def register_routes(app: Flask) -> None:
                     "Admin can approve escalations that enable the terminal.",
                 ],
                 "access": simulated_access,
+                "preview": _build_preview_payload(
+                    title=f"{role_label} permissions active",
+                    subtitle="Header-based SSO projection controls which panels unlock.",
+                    mode=mode,
+                ),
                 "sample": f"curl -H 'X-Demo-User: jane' -H 'X-Demo-Role: {role}' http://localhost:5000/whoami",
             }
         )
