@@ -74,22 +74,22 @@ ROLE_LABELS = {
 SIMULATED_FEATURES = [
     {
         "name": "Log viewer",
-        "endpoint": "con5013.logs",
+        "endpoint": "con5013.api_logs",
         "description": "Inspect immutable application logs captured by the secured profile.",
     },
     {
         "name": "System monitor",
-        "endpoint": "con5013.system_monitor",
+        "endpoint": "con5013.api_system_stats",
         "description": "Review CPU, memory, and request counters without shelling into the host.",
     },
     {
         "name": "API scanner",
-        "endpoint": "api_scanner.index",
+        "endpoint": "con5013.api_scanner_discover",
         "description": "Enumerate Flask routes to understand which surfaces are exposed.",
     },
     {
         "name": "Interactive terminal",
-        "endpoint": "api_terminal.execute",
+        "endpoint": "con5013.api_terminal_execute",
         "description": "Break-glass capability for administrators when deeper debugging is required.",
     },
 ]
@@ -1157,7 +1157,7 @@ def register_routes(app: Flask) -> None:
                 {
                     "name": feature["name"],
                     "description": feature["description"],
-                    "allowed": feature["endpoint"] != "api_terminal.execute",
+                    "allowed": feature["endpoint"] != "con5013.api_terminal_execute",
                 }
                 for feature in SIMULATED_FEATURES
             ]
